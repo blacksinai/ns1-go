@@ -1,80 +1,5136 @@
-FORMAT: 1A
-HOST: http://polls.apiblueprint.org/
+MAT: 1A
+HOST: https://api.nsone.net/v1/
 
-# nick
+# NS1 API
 
-Polls is a simple API allowing consumers to view polls and vote in them.
+This is the documentation for NS1's API (v1), which allows you to manage your zones and records, data sources and feeds, account settings and users, and other aspects of your NS1 account. You can do everything you're used to doing in my.nsone.net in our API — and more!
 
-## Questions Collection [/questions]
+The NS1 API is a standard REST API with JSON responses. The HTTP method you use — `GET`, `PUT`, `POST`, or `DELETE` — determines the kind of action to be taken by the API. In the case of `PUT` and `POST` requests, you will generally send us a JSON body in your request with the details of the resource you're creating or updating.
 
-### List All Questions [GET]
+Most API requests are authenticated with a simple API Key, which you must specify in the **X-NSONE-Key** request header. You can manage your API Keys in **my.nsone.net**. You should treat your API Keys as secrets! You should also give them only the minimal access needed for your application.
+
+# Authentication
+Basic HTTP Authentication, most API requests are authenticated with a simple  API Key, which you must specify in the `X-NSONE-Key` request header. 
+
+    + Headers
+
+            X-NSONE-Key: <Token>
+
+
+# Client Libraries
+
+[Python](https://github.com/ns1/nsone-python)
+
+[Go](https://github.com/ns1/ns1-go)
+
+[PHP](https://github.com/ns1/nsone-php)
+
+[JavaScript](https://github.com/ns1/ns1-js)
+
+# Example API Requests
+
+
+- Create a new DNS zone
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"zone":"newzone.com", "nx_ttl":60}' https://api.nsone.net/v1/zones/newzone.com
+`
+
+- Create a new secondary DNS zone
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"zone":"newzone.com", "secondary": {"enabled":true, "primary_ip":"1.2.3.4"}}' https://api.nsone.net/v1/zones/newzone.com
+`
+
+- Create a new zone allowing `AXFR` and sending `NOTIFY` to a slave
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"zone":"newzone.com", "primary": {"enabled":true, "secondaries":[ {"ip":"1.2.3.4", "port":53, "notify":true} ]}}' https://api.nsone.net/v1/zones/newzone.com
+`
+
+- List active zones
+
+`
+curl -X GET -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' https://api.nsone.net/v1/zones
+`
+
+- Import a new zone from a zone file
+
+`
+curl -X PUT -F zonefile=@example.com.db -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' https://api.nsone.net/v1/import/zonefile/example.com
+`
+
+- Create a simple `A` record
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"zone":"example.com", "domain":"arecord.example.com", "type":"A", "answers":[{"answer":["1.2.3.4"]}]}' https://api.nsone.net/v1/zones/example.com/arecord.example.com/A
+`
+
+- Create a linked `A` record
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"zone":"example.com", "domain":"linked-record.example.com", "type":"A", "link":"arecord.example2.com", "answers": []}' https://api.nsone.net/v1/zones/example.com/linked-record.example.com/A
+`
+
+- Create an `MX` record with multiple answers
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"zone":"example.com", "domain":"example.com", "type":"MX", "answers":[{"answer":[5, "mail1.example.com"]}, {"answer":[10, "mail2.example.com"]}]}' https://api.nsone.net/v1/zones/example.com/example.com/MX
+`
+
+- Create a record with `GEOTARGET_REGIONAL`
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"zone":"example.com", "domain":"georegion.example.com", "type":"A", "answers":[{"answer":["1.1.1.1"], "meta":{"georegion":["US-EAST"]}}, {"answer":["9.9.9.9"], "meta":{"georegion":["US-WEST"]}}], "filters":[{"filter":"geotarget_regional", "config":{}}, {"filter":"select_first_n", "config":{"N":1}}]}' https://api.nsone.net/v1/zones/example.com/georegion.example.com/A
+`
+
+This creates an `A` record with two answers: a server (**1.1.1.1**) in the `US-EAST` geotargeting region, and a server (**9.9.9.9**) in the `US-WEST` geotargeting region. We also add the `GEOTARGET_REGIONAL` filter first in the filter chain (it needs no configuration); and follow it with the `SELECT_FIRST_N` filter with N set to 1, which picks the closest answer.
+
+
+- Disable use of **edns-client-subnet** data for a record
+
+`
+curl -X POST -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"use_client_subnet":false}' https://api.nsone.net/v1/zones/example.com/example.com/A
+`
+
+- Connect a Cloudwatch data source
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"sourcetype":"cloudwatch", "name":"My Cloudwatch Topic", "config":{}}' https://api.nsone.net/v1/data/sources
+`
+
+After creating the Cloudwatch data source in NSONE, create an SNS topic in your Amazon account, connect any alerts you want to feed to NSONE to that topic, and create an HTTPS subscription for the topic with the NSONE Feed URL (https://api.nsone.net/v1/feed/:feedid). New data feeds for this source should specify the Alarm Name of a Cloudwatch alarm.
+
+- Connect a feed from a Rackspace data source
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"name":"server.example.com alert", "config":{"entity_id":"enAAAAA", "alarm_id":"alAAAAA"}}' https://api.nsone.net/v1/data/feeds/f443e609c9a9182b3dab56b7abd744342
+`
+
+You must have already connected a Rackspace Cloud Monitoring data source. In this example we specify Cloud Monitoring Entity and Alarm ids — we can also optionally specify a Check id.
+
+- Push an update to an NS1 API data feed
+
+`
+curl -X POST -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"server-1": {"up":false}, "server-2": {"up":true}}' https://api.nsone.net/v1/feed/a53252f9e583c6708331a1daeb172e12
+`
+
+In this case we assume two data feeds already exist for an NSONE API data source. The data feeds have labels **server-1** and **server-2** (we might connect them to answers representing those servers in some DNS records). This update tells NSONE that **server-1** is down, and **server-2** is up. Any records which have their **up** meta key connected to one of these feeds will be affected.
+
+- Create a new ping monitor
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"name":"1.2.3.4 Ping Check", "job_type":"ping", "region_scope":"fixed", "regions":["lga","sin","ams"], "frequency":60, "config":{"host":"1.2.3.4"}, "rules":[{"key":"loss", "comparison":"<", "value":75.0}], "notify_list":"52cc775a2db2861b55176727"}' https://api.nsone.net/v1/monitoring/jobs
+`
+
+This creates a simple **ping** job that runs in three monitoring regions: **lga** (New York), **sin** (Singapore), and **ams** (Amsterdam). The host is pinged from all regions each 60 seconds and a rule is configured to fail the monitor if packet loss exceeds 75%. When the job's status changes, notifications are sent to the specified notification list immediately.
+
+- Create a new TCP/HTTPS monitor
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"name":"1.2.3.4:443 HTTPS check", "job_type":"tcp", "region_scope":"fixed", "regions":["lga"], "frequency":60, "config":{"host":"1.2.3.4", "port":443, "send":"HEAD / HTTP/1.0\r\n\r\n", "ssl":"1"}, "rules":[{"key":"output", "comparison":"contains", "value":"200 OK"}], "notify_delay":300, "notify_list":"52cc775a2db2861b55176727"}' https://api.nsone.net/v1/monitoring/jobs
+`
+
+This creates a simple **tcp** job that runs in the **lga** (New York) monitoring region. Every 60 seconds a TCP connection is opened to port 443 on the host; an SSL session is negotiated; and a simple **HEAD** request is sent. String escapes are interpreted in the **send** parameter. Then, if a response is returned it is tested to see if it contains "**200 OK**". If not or if no response is returned, the monitor fails, but a notification is only sent if the monitor remains down for 300 seconds.
+
+- Create a new notification list that pushes to Data Feeds
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"name":"Critical Notifications", "notify_list":[ {"type":"email", "config":{"email":"mystaff@mycompany.com"}}, {"type":"datafeed", "config":{"sourceid":"b85579edee904f0f204a6eb07b3f8a1f"}} ]}' https://api.nsone.net/v1/lists
+`
+
+We create a new list to receive monitoring notifications. Notifications will be sent to both an email address (**mystaff@mycompany.com**) and to an NSONE Data Source for use with NSONE's DNS metadata. To connect a **datafeed** notifier, the **sourceid** must be a **nsone_monitoring** Data Source. Status changes for monitors connected to this notification list will be delivered to the Data Source, and if a Data Feed is configured under the source for the monitor, then the changes will be pushed to all metadata tables connected to the Data Feed.
+
+- Invite a new user with full access to your account
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"username":"newuser", "name":"New User", "email":"newuser@example.com"}' https://api.nsone.net/v1/account/users/newuser
+`
+
+An invitation email will be sent to **newuser@example.com** allowing them to set a password and log in to **my.nsone.net**.
+
+- Create an API Key that can only view one zone
+
+`
+curl -X PUT -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' -d '{"name":"My Application", "permissions":{"dns":{"view_zones":true, "manage_zones":false, "zones_allow_by_default":false, "zones_allow":["example.com"]}, "account":{"manage_account_settings":false, "manage_payment_methods":false, "manage_plan":false, "manage_teams":false, "manage_users":false, "manage_apikeys":false, "view_activity_log":false, "view_invoices":false}, "data":{"manage_datasources":false, "manage_datafeeds":false, "push_to_datafeeds":false}, "monitoring":{"manage_lists":false, "manage_jobs":false, "view_jobs":false} }}' https://api.nsone.net/v1/account/apikeys
+`
+
+You must explicitly deny permissions you do not want a new API Key (or User) to have. Since **zones_allow_by_default** is **false**, the user will have access only to zones in **zones_allow**. We grant this user access to **example.com** only — and since they only have **view_zones** access, they can only look at the zone's configuration and stats, and can make no changes.
+
+- Get usage by zone with graphs for last 24 hours
+
+`
+curl -X GET -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' "https://api.nsone.net/v1/stats/usage?expand=true&period=24h"
+`
+
+- Get account-wide usage by billing tier for last 30 days
+
+`
+curl -X GET -H 'X-NSONE-Key: qACMD09OJXBxT7XOuRs8' "https://api.nsone.net/v1/stats/usage?period=30d&aggregate=false&by_tier=true"
+`
+
+Usage is returned broken down by billing tier with arrays like `[<static>, <dynamic>, <intelligent>]`.
+
+# API Root [/v1/]
+
++ Request JSON Message
+
+     + Headers
+
+             X-NSONE-Key: APIKEY
+
++ Response 200 (application/json)
+
+    + Headers
+    
+            X-RateLimit-Limit: 300
+            X-RateLimit-Period: 300
+            X-RateLimit-By: 300
+            X-RateLimit-Remaining: 300
+
+# Group Zones and Records
+
+## Zone [/zones/{zone}]
+
+### Get list of active zones [GET /zones]
+
+Returns all active zones and basic zone configuration details for each.
 
 + Response 200 (application/json)
 
         [
             {
-                "question": "Favourite programming language?",
-                "published_at": "2015-08-05T08:40:51.620Z",
-                "choices": [
-                    {
-                        "choice": "Swift",
-                        "votes": 2048
-                    }, {
-                        "choice": "Python",
-                        "votes": 1024
-                    }, {
-                        "choice": "Objective-C",
-                        "votes": 512
-                    }, {
-                        "choice": "Ruby",
-                        "votes": 256
-                    }
-                ]
+                "id": "520422af9f782d37dffb588b",
+                "ttl": 3600,
+                "nx_ttl": 3600,
+                "retry": 7200,
+                "zone": "example.com",
+                "refresh": 43200,
+                "expiry": 1209600,
+                "dns_servers": [
+                    "dns1.p03.nsone.net",
+                    "dns2.p03.nsone.net",
+                    "dns3.p03.nsone.net",
+                    "dns4.p03.nsone.net"
+                ],
+                "networks": [0],
+                "network_pools": ["p03"],
+                "meta": {},
+                "hostmaster": "hostmaster@nsone.net"
+            },
+            {
+                "id": "520422c99f782d37dffb5892",
+                "ttl": 3600,
+                "nx_ttl": 3600,
+                "retry": 7200,
+                "zone": "nsoneisgreat.com",
+                "refresh": 43200,
+                "expiry": 1209600,
+                "dns_servers": [
+                    "dns1.p04.nsone.net",
+                    "dns2.p04.nsone.net",
+                    "dns3.p04.nsone.net",
+                    "dns4.p04.nsone.net"
+                ],
+                "networks": [0],
+                "network_pools": ["p04"],
+                "meta": {},
+                "hostmaster": "hostmaster@nsone.net"
             }
         ]
+        
+### Get a zone's details [GET]
 
-### Create a New Question [POST]
+Returns a single active __Zone__ and its basic configuration details. 
+For convenience, a list of records in the zone, and some basic
+details of each record, is also included.
 
-You may create your own question using this action. It takes a JSON
-object containing a question and a collection of answers in the
-form of choices.
++ Parameters
+    + zone (string) - The zone name
+
++ Attributes (ZoneType)
+
++ Response 200 (application/json)
+
+    + Headers
+
+            X-RateLimit-Limit: 300
+            X-RateLimit-Period: 300
+            X-RateLimit-By: 300
+            X-RateLimit-Remaining: 300
+    
+    + Body
+
+            {
+                "nx_ttl":3600,
+                "retry":7200,
+                "zone":"example.zone",
+                "network_pools":["p01"],
+                "primary":{"enabled":false,"secondaries":[]},
+                "refresh":43200,
+                "expiry":1209600,
+                "dns_servers":["dns1.p01.nsone.net","dns2.p01.nsone.net"],
+                "records":[{
+                    "domain":"*.example.zone",
+                    "short_answers":["107.6.104.250"],
+                    "ttl":60,
+                    "tier":1,
+                    "type":"A",
+                    "id":"4tq3g3qgq431"
+                },{
+                    "domain":"example.zone",
+                    "short_answers":["107.6.104.250"],
+                    "ttl":3600,
+                    "tier":1,
+                    "type":"A",
+                    "id":"53qg958097h8h"
+                },{
+                    "domain":"example.zone",
+                    "short_answers":["10 mail.example.zone"],
+                    "ttl":60,
+                    "tier":1,
+                    "type":"MX",
+                    "id":"7684w99bn0304"
+                },{
+                    "domain":"example.zone",
+                    "short_answers":["dns1.p01.nsone.net","dns2.p01.nsone.net","dns3.p01.nsone.net","dns4.p01.nsone.net"],
+                    "ttl":3600,
+                    "tier":1,
+                    "type":"NS",
+                    "id":"49q583704q59br30"
+                },{
+                    "domain":"t.example.zone",
+                    "short_answers":["2620:4d:4002:142::100b"],
+                    "link":null,
+                    "ttl":3600,
+                    "tier":1,
+                    "type":"AAAA",
+                    "id":"5849q78798753q9093"
+                }],
+                "serial":1473781037,
+                "ttl":60,
+                "id":"516232306091501062635019",
+                "hostmaster":"hostmaster@example.zone",
+                "networks":[0],
+                "pool":"p01"
+            }
+
+### Create a new DNS zone [PUT]
+
+You must include a JSON body in the request with basic details of the zone. The only required element in the body is **zone**, the zone domain name. You may create a standard zone (which has its own configuration and records), a linked zone (which points to an existing standard zone, reusing its configuration and records), or a secondary zone (which slaves DNS records from an external primary DNS server). For non-linked zones, you may specify optional zone configuration by including **ttl** (SOA record TTL), **refresh**, **retry**, **expiry**, and **nx_ttl** values, as in a `SOA` record. The zone is assigned DNS servers and appropriate `NS` records are automatically created, unless you create a secondary zone.
+
+To create a linked zone, you must include a **link** property in the body of your request. It must be a string which references the target zone (domain name) to link to. The target zone must be owned by the same account that is creating the linked zone. If the **link** property is specified, no other zone configuration properties (such as refresh, retry, etc) may be specified, since they are all pulled from the target zone. Linked zones, once created, cannot be configured at all and cannot have records added to them. They may only be deleted, which does not affect the target zone at all.
+
+To create a secondary zone, you must include a **secondary** object in the body of your request including fields **enabled** (**true**/**false**, if **true** the zone is configured as a secondary zone); and **primary_ip** (an IPv4 address, not a hostname, for the primary DNS server for the zone). If your primary DNS server is running on a non-standard port, you may also include **primary_port**.
+
+To enable slaving of your zone by third party DNS servers, you must include a **primary object** in the body of your request including fields **enabled** (**true**/**false**, if **true** then `AXFR` queries and optionally `NOTIFY` messages will be enabled for the zone); and **secondaries**, a list of objects each containing **ip** (IPv4 address of the secondary node), **port** (optional, port on **host** to send `NOTIFY` messages, default 53), and **notify** (**true**/**false**, if **true** then we will send `NOTIFY` messages to the secondary host when the zone changes).
+
+If your account has access to multiple DNS networks, you may pass in **networks**, a list of network ids for which the zone should be made available. If you do not provide a list of networks, the zone will be created in network **0**, the primary NSONE Global Network. DNS servers will be selected and assigned from among all the networks you specify.
+
++ Parameters
+    + zone (string) - The zone name
+
++ Attributes (ZoneType)
 
 + Request (application/json)
 
         {
-            "question": "Favourite programming language?",
-            "choices": [
-                "Swift",
-                "Python",
-                "Objective-C",
-                "Ruby"
-            ]
+            "zone": "newzone.com",
+            "ttl": 3600,
+            "nx_ttl": 60
         }
 
-+ Response 201 (application/json)
++ Response 200 (application/json)
+
+        {
+            "nx_ttl":60,
+            "retry":7200,
+            "zone":"newzone.com",
+            "network_pools":["p02"],
+            "primary":{"enabled":false,"secondaries":[]},
+            "refresh":43200,
+            "expiry":1209600,
+            "dns_servers":["dns1.p02.nsone.net","dns2.p02.nsone.net"],
+            "records":[{
+                "domain":"newzone.com",
+                "short_answers":["dns1.p02.nsone.net","dns2.p02.nsone.net"],
+                "ttl":60,
+                "tier":1,
+                "type":"NS",
+                "id":"58tw985ghg9jn0"
+            }],
+            "meta":{},
+            "link":null,
+            "serial":1484290340,
+            "ttl":3600,
+            "id":"34qt0985g9hj859h",
+            "hostmaster":"hostmaster@nsone.net",
+            "networks":[0],
+            "pool":"p02"
+        }
+
+### Modify a zone [POST]
+
+Modifies basic details of a DNS zone. You must include a JSON body in the request, in which you may include **ttl** (SOA record TTL), **refresh**, **retry**, **expiry**, or **nx_ttl** values, as in a `SOA` record. You may not change the zone name or other details.
+
+If the zone is a secondary zone, you may change the **primary_ip** and **primary_port** for the zone. You may also change **enabled** in the **secondary** object to convert a zone between primary and secondary behavior. Note that when converting from a secondary to a primary zone, you will need to create a `NS` record for the zone with the zone's assigned NSONE nameservers.
+
+You may enable/disable slaving from the zone and add/remove secondary (slave) hosts by manipulating the **primary** object.
+
+You may modify the set of DNS networks for which the zone should be made available. Note that if you remove a network from a zone, and later re-add it, then new nameservers will be assigned within that network. You may remove all networks from a zone, in which case the zone will not be accessible from any DNS network.
+
++ Parameters
+    + zone (string) - The zone name
+
++ Attributes (ZoneType)
+
++ Request (application/json)
+
+        {
+            "refresh": 10800
+        }
+        
++ Response 200 (application/json)
+
+        {
+            "nx_ttl":60,
+            "retry":7200,
+            "zone":"newzone.com",
+            "network_pools":["p02"],
+            "primary":{"enabled":false,"secondaries":[]},
+            "refresh":10800,
+            "expiry":1209600,
+            "dns_servers":["dns1.p02.nsone.net","dns2.p02.nsone.net"],
+            "records":[{
+                "domain":"newzone.com",
+                "short_answers":["dns1.p02.nsone.net","dns2.p02.nsone.net"],
+                "ttl":60,
+                "tier":1,
+                "type":"NS",
+                "id":"349t0q358g98gh308"
+            }],
+            "meta":{},
+            "link":null,
+            "serial":1484290684,
+            "ttl":3600,
+            "id":"439qtj058gh3458",
+            "hostmaster":"hostmaster@nsone.net",
+            "networks":[0],
+            "pool":"p02"
+        }
+
+### Delete a zone and all its records [DELETE]
+
+Destroys an existing DNS zone and all records in the zone. Our servers won't respond to queries for the zone or any of the records after you do this, and you cannot recover the deleted zone, so be careful! There is no request body required, and there is no response other than the HTTP status code.
+
++ Parameters
+    + zone (string) - The zone name
+
++ Response 200
+
+### Import a zone from a zone file [PUT /import/zonefile/{zone}{?async}]
+
+Upload a [zone file](http://en.wikipedia.org/wiki/Zone_file), using form encoding (**multipart/form-data**) with the zone file as the content of the **zonefile** form parameter. The zone must not already exist in your account. It will be created, as will all records in the zone file. Any round-robin records (e.g., multiple `A` records for the same domain) will be treated as answers for a single combined record in your account. Existing `NS` records will be replaced, as will some details of `SOA` records.
+
+There are two modes: synchronous (default) and asynchronous. In asynchronous mode, you must check back with a `GET` request using the returned job id to get the results of your request. In synchronous mode, the connection remains open until the results can be returned to you directly. Full details of the new zone and all records are returned; a **warnings** field contains a list of strings with any warnings from the zone file import process.
+
+Upon import, the zone will be made available only on the NSONE Global Network (network **0**). If your account has access to other DNS networks and you wish to make the zone available via those networks, simply add them to the zone after importing the zone file.
+
++ Parameters
+    + zone (string) - The zone name
+    + async: `false` (boolean, optional)
+        + Default: false
+        
++ Request (multipart/form-data; boundary=----------------------------a5d22159c43c)
+    + Parameters
+        + zone: newzone.com
+        
+    + Body
+        
+            {
+        
+                ------------------------------a5d22159c43c
+                Content-Disposition: form-data; name="zonefile"; filename="newzone.com.db"
+                Content-Type: application/octet-stream
+                
+                $ORIGIN newzone.com.
+                $TTL 300
+                @   SOA ns1.newzone.com. hostmaster.newzone.com. 201303202324 43200 7200 1209600 3600
+                @   NS  ns1
+                @   NS  ns2
+                @   A   1.2.3.4
+                www A   1.2.3.4
+                ------------------------------a5d22159c43c
+            
+            }
+
++ Response 200
+
+        {
+            "id": "52052aa99f782d5b1a10a831",
+            "hostmaster": "hostmaster@nsone.net",
+            "meta": {},
+            "ttl": 3600,
+            "nx_ttl": 300,
+            "retry": 7200,
+            "zone": "newzone.com",
+            "warnings": [],
+            "refresh": 43200,
+            "expiry": 1209600,
+            "dns_servers": [
+                "dns1.p06.nsone.net",
+                "dns2.p06.nsone.net",
+                "dns3.p06.nsone.net",
+                "dns4.p06.nsone.net"
+            ],
+            "networks": [0],
+            "network_pools": ["p06"],
+            "records": [
+                {
+                    "id": "52052aa99f782d5b1a10a836",
+                    "type": "NS",
+                    "tier": 1,
+                    "short_answers": [
+                        "dns1.p06.nsone.net",
+                        "dns2.p06.nsone.net",
+                        "dns3.p06.nsone.net",
+                        "dns4.p06.nsone.net"
+                    ],
+                    "domain": "newzone.com"
+                },
+                {
+                    "id": "52052aa99f782d5bcc10a847",
+                    "type": "A",
+                    "tier": 1,
+                    "domain": "newzone.com",
+                    "zone": "newzone.com",
+                    "short_answers": [
+                        "1.2.3.4"
+                    ]
+                },
+                {
+                    "id": "52052aa99f78375bcc10a666",
+                    "type": "A",
+                    "tier": 1,
+                    "domain": "www.newzone.com",
+                    "zone": "newzone.com",
+                    "short_answers": [
+                        "1.2.3.4"
+                    ]
+                }
+            ]
+        }
+      
++ Request (multipart/form-data; boundary=----------------------------a5d22159c43c)
+    + Parameters
+        + zone: newzone.com
+        + async: true
+        
+    + Body
+        
+            {
+                ------------------------------a5d22159c43c
+                Content-Disposition: form-data; name="zonefile"; filename="newzone.com.db"
+                Content-Type: application/octet-stream
+                
+                $ORIGIN newzone.com.
+                $TTL 300
+                @   SOA ns1.newzone.com. hostmaster.newzone.com. 201303202324 43200 7200 1209600 3600
+                @   NS  ns1
+                @   NS  ns2
+                @   A   1.2.3.4
+                www A   1.2.3.4
+                ------------------------------a5d22159c43c
+            }
+
++ Response 200
+
+        {
+            "sent": 1376070394,
+            "id": "zIbC9VfrnVtubXfJbM6a",
+            "type": "importzonefile",
+            "percent": 20,
+            "status": "Creating zone"
+        }
+
+### Get status of a zone file import [GET /import/zonefile/{jobid}]
+
+Get the status, and if finished, results of, a zone file import job launched with a `PUT` request to **/import/zonefile/:zone**. The **jobid** is the value of the **id** field in the response of an asynchronous import request. If the zone file import is finished, the response includes the fields **response** (body containing import request results), and **response_code** (final HTTP status code for the import request).
+
++ Parameters
+    + jobid (string)
+    
++ Response 200 (application/json)
+
+        {
+            "sent": 1376070394,
+            "id": "zIbC9VfrnVtubXfJbM6a",
+            "type": "importzonefile",
+            "result": {
+                "id": "52052afa9f782d5b1a10a83f",
+                "hostmaster": "hostmaster@nsone.net",
+                "meta": {},
+                "ttl": 3600,
+                "nx_ttl": 300,
+                "retry": 7200,
+                "zone": "newzone.com",
+                "warnings": [],
+                "refresh": 43200,
+                "expiry": 1209600,
+                "records": [
+                    {
+                        "id": "52052afa9f782d5b1a10a844",
+                        "type": "NS",
+                        "tier": 1,
+                        "short_answers": [
+                            "dns1.p01.nsone.net",
+                            "dns2.p01.nsone.net",
+                            "dns3.p01.nsone.net",
+                            "dns4.p01.nsone.net"
+                        ],
+                        "domain": "newzone.com"
+                    },
+                    {
+                        "type": "A",
+                        "feeds": [],
+                        "tier": 1,
+                        "domain": "newzone.com",
+                        "zone": "newzone.com",
+                        "answers": [
+                            {
+                                "id": "52052afa9f782d5b1a10a846",
+                                "answer": [
+                                    "1.2.3.4"
+                                ]
+                            }
+                        ],
+                        "regions": {},
+                        "meta": {},
+                        "filters": [],
+                        "ttl": 300
+                    },
+                    {
+                        "type": "A",
+                        "feeds": [],
+                        "tier": 1,
+                        "domain": "www.newzone.com",
+                        "zone": "newzone.com",
+                        "answers": [
+                            {
+                                "id": "52052afa9f782d5b1a10a848",
+                                "answer": [
+                                    "1.2.3.4"
+                                ]
+                            }
+                        ],
+                        "regions": {},
+                        "meta": {},
+                        "filters": [],
+                        "ttl": 300
+                    }
+                ],
+                "dns_servers": [
+                    "dns1.p01.nsone.net",
+                    "dns2.p01.nsone.net",
+                    "dns3.p01.nsone.net",
+                    "dns4.p01.nsone.net"
+                ],
+                "networks": [0],
+                "network_pools": ["p01"]
+            },
+            "percent": 100,
+            "status": "Created zone and 3 records",
+        }
+        
+### Search zones and records [GET /search{?q,max,type}]
+
+Returns all zones and records that match a query string **q**. You can limit the **max** number of results and you can restrict the **type** of results to **zone**, **record**, or **all**. Entries in the response without **domain**/**type** are zones, and those with **domain**/**type** are records.
+
++ Parameters
+    + q: `example.com` (string) - The query string
+    + max: `10` (number, optional) - Maximum number of results
+    + type: `all` (string, optional) - Type of results
+        + Members
+            + `zone`
+            + `record`
+            + `all`
+
++ Response 200 (application/json)
+
+        [
+            {
+                "zone": "example.com"
+            },
+            {
+                "zone": "example.com",
+                "type": "NS",
+                "domain": "example.com"
+            },
+            {
+                "zone": "example.com",
+                "type": "MX",
+                "domain": "mail.example.com"
+            },
+            {
+                "zone": "example.com",
+                "type": "A",
+                "domain": "www.example.com"
+            }
+        ]
+        
+### List available networks [GET /networks]
+
+Some customers may have access to DNS networks other than the primary NSONE Global Network. This endpoint lists all networks for which you may create zones and records. You will generally always have access to the NSONE Global Network (network **0**).
+
++ Response 200 (application/json)
+
+        [
+            {
+                "network_id": 0,
+                "label": "NSONE",
+                "name": "NSONE Global Network"
+            },
+            {
+                "network_id": 82,
+                "label": "myprivate",
+                "name": "My Private Network"
+            }
+        ]
+        
+## Record [/zones/{zone}/{domain}/{type}]
+
++ Parameters
+    + zone (string) - The zone name
+    + domain (string) - The domain name
+    + type (string) - The record type
+
+### Get record configuration details [GET]
+
+Returns full configuration for a DNS record including basic config, **answers**, **regions**, filter chain configuration, and all metadata tables and data feeds attached to entities in the record. (Note that **regions** might be any specified grouping, not necessarily a geo-related region. For this reason, the NS1 web portal at my.nsone.net uses the word "group" instead of "region".)
+
+You must fully specify **zone**, **domain**, and record **type**, e.g., **example.com/www.example.com/A** returns the `A` record for **www.example.com** in the **example.com** zone.
+
++ Attributes (RecordType)
+
++ Response 200 (application/json)
 
     + Headers
 
-            Location: /questions/2
+            X-RateLimit-Limit: 300
+            X-RateLimit-Period: 300
+            X-RateLimit-By: 300
+            X-RateLimit-Remaining: 300
+    
+    + Body
+    
+            {
+                "id": "520519509f782d58bb4df419",
+                "networks": [0],
+                "type": "A",
+                "tier": 3,
+                "domain": "www.example.com",
+                "zone": "example.com",
+                "answers": [
+                    {
+                        "id": "520519509f782d58bb4df418",
+                        "feeds": [
+                            {
+                                "source": "a53252f9e583c6708331a1daeb172e12",
+                                "feed": "520533b89f782d5b1a10a851"
+                            }
+                        ],
+                        "answer": [
+                            "1.1.1.1"
+                        ],
+                        "meta": {
+                            "up": { feed: "520533b89f782d5b1a10a851" },
+                            "priority": 1
+                        },
+                        "region": "us-east"
+                    },
+                    {
+                        "id": "5205338e9f782d5b1a10a84e",
+                        "feeds": [
+                            {
+                                "source": "a53252f9e583c6708331a1daeb172e12",
+                                "feed": "520533c09f782d5b1a10a852"
+                            }
+                        ],
+                        "answer": [
+                            "2.2.2.2"
+                        ],
+                        "meta": {
+                            "up": { feed: "520533b89f782d5b1a10a852" },
+                            "priority": 2
+                        },
+                        "region": "us-east"
+                    },
+                    {
+                        "id": "5205338e9f782d5b1a10a84f",
+                        "feeds": [
+                            {
+                                "source": "a53252f9e583c6708331a1daeb172e12",
+                                "feed": "520533dc9f782d5b1a10a854"
+                            }
+                        ],
+                        "answer": [
+                            "8.8.8.8"
+                        ],
+                        "meta": {
+                            "up": { feed: "520533b89f782d5b1a10a854" },
+                            "priority": 3
+                        },
+                        "region": "us-west"
+                    },
+                    {
+                        "id": "5205338e9f782d5b1a10a850",
+                        "feeds": [
+                            {
+                                "source": "a53252f9e583c6708331a1daeb172e12",
+                                "feed": "520533e49f782d5b1a10a855"
+                            }
+                        ],
+                        "answer": [
+                            "9.9.9.9"
+                        ],
+                        "meta": {
+                            "up": { feed: "520533b89f782d5b1a10a855" },
+                            "priority": 3
+                        },
+                        "region": "us-west"
+                    }
+                ],
+                "regions": {
+                    "us-east": {
+                        "meta": {
+                            "georegion": ["US-EAST"]
+                        }
+                    },
+                    "us-west": {
+                        "meta": {
+                            "georegion": ["US-WEST"]
+                        }
+                    }
+                },
+                "meta": {},
+                "filters": [
+                    {
+                        "config": {},
+                        "filter": "up"
+                    },
+                    {
+                        "config": {},
+                        "filter": "geotarget_regional"
+                    },
+                    {
+                        "config": {},
+                        "filter": "select_first_region"
+                    },
+                    {
+                        "config": {},
+                        "filter": "weighted_shuffle"
+                    },
+                    {
+                        "config": {
+                            "N": 1
+                        },
+                        "filter": "select_first_n"
+                    }
+                ],
+                "ttl": 60,
+                "use_client_subnet": true
+            }
+
+### Create a new DNS record [PUT]
+
+Creates a new DNS record in the specified **zone**, for the specified domain, of the given record **type**. Currently supported record types are: `A`, `AAAA`, `ALIAS`, `AFSDB`, `CAA`, `CERT`, `CNAME`, `DNAME`, `HINFO`, `MX`, `NAPTR`, `NS`, `PTR`, `RP`, `SPF`, `SRV`, `TXT`. The **answer** field within each entry in the **answers** list must be a list of the RDATA fields for a DNS record of the specified type.
+
+You may not create multiple records of the same type for the same domain name in a zone — instead, add new answers to the existing record. The default behavior if no filters are in the filter chain is to return all answers matching a query.
+
+Metadata tables (**meta**) may be specified in **answers**, in **regions** or in the record as a whole. (Note that **regions** can be any kind of group, not just geo-related. For this reason, the NS1 web portal at my.nsone.net uses the word "group" instead of "region".) The metadata tables may contain key/value pairs where valid keys and values are as described in the output of **/metatypes**.
+
+Anywhere metadata tables can go, data feeds can go as well. Connect a compatible feed to a metadata key by assigning its value to be a JSON object pointing to the data feed that should be consulted for the final value.
+
+The new record will take on the same **networks** as the zone it's in.
+
+Instead of specifying **answers** and other details, you may create a "linked" record. This allows you reuse the configuration (including answers and metadata) from an existing record in NSONE's systems. Linked records will respond in the exact same way as their targets at DNS resolution time, and can be used for maintaining complicated record configurations in a single record while pointing (linking) other lightweight records to it. Linked records must point to another record of the exact same record type and do not have to exist in the same zone.
+
+To create a linked record, specify the **link** property as a string whose contents is the FQDN containing the config it should link to. If **link** is specified, no other record configuration (such as **answers** or **meta**) should be specified.  
+
++ Attributes (RecordType)
+
++ Request (application/json)
+
+        {
+            "zone": "example.com",
+            "domain": "mail.example.com",
+            "type": "MX",
+            "answers": [
+                {
+                    "answer": [
+                        10,
+                        "1.2.3.4"
+                    ],
+                    "meta": {
+                        "up": { feed: "520533b89f782d5b1a10a854" }
+                    }
+                }
+            ]
+        }
+
+
++ Response 200 (application/json)
+
+        {
+            "id": "52053b569f782d5b1a10a85a",
+            "networks": [0],
+            "type": "MX",
+            "feeds": [],
+            "tier": 1,
+            "customer": 1004,
+            "domain": "mail.example.com",
+            "zone": "example.com",
+            "answers": [
+                {
+                    "id": "52053b569f782d5b1a10a859",
+                    "feeds": [
+                        {
+                            "source": "a53252f9e583c6708331a1daeb172e12",
+                            "feed": "520533b89f782d5b1a10a854"
+                        }
+                    ],
+                    "answer": [
+                        10,
+                        "1.2.3.4"
+                    ],
+                    "meta": {
+                        "up": { feed: "520533b89f782d5b1a10a854" }
+                    }
+                }
+            ],
+            "regions": {},
+            "meta": {},
+            "filters": [],
+            "ttl": 3600,
+            "use_client_subnet": true
+        }
+
+### Update record configuration [POST]
+
+Modifies configuration details for an existing DNS record.
+
++ Attributes (RecordType)
+
++ Request (application/json)
+
+        {
+            "answers": [
+                {
+                    "answer": [
+                        10,
+                        "1.2.3.4"
+                    ]
+                },
+                {
+                    "answer": [
+                        20,
+                        "5.6.7.8"
+                    ]
+                }
+            ]
+        }
+
++ Response 200 (application/json)
+
+        {
+            "id": "52053b569f782d5b1a10a85a",
+            "networks": [0],
+            "type": "MX",
+            "feeds": [],
+            "tier": 1,
+            "customer": 1004,
+            "domain": "mail.example.com",
+            "zone": "example.com",
+            "answers": [
+                {
+                    "id": "52053c239f782d5b1a10a85e",
+                    "answer": [
+                        10,
+                        "1.2.3.4"
+                    ]
+                },
+                {
+                    "id": "52053c239f782d5b1a10a85f",
+                    "answer": [
+                        20,
+                        "5.6.7.8"
+                    ]
+                }
+            ],
+            "regions": {},
+            "meta": {},
+            "filters": [],
+            "ttl": 3600,
+            "use_client_subnet": true
+        }
+
+### Delete a record [DELETE]
+
+Removes an existing record and all associated answers and configuration details. We will no longer respond for this record once it is deleted, and it cannot be recovered, so use caution. **Note**: This operation deletes *all* answers associated with the **domain** and record **type**. If you want to delete individual answers, do a `POST` operation to update the record's **answers** list. This method has no response other than the HTTP status code.
++ Response 200
+
+### Get available metadata fields [GET /metatypes]
+
+Returns a list of available metadata fields for use in configuring records, including descriptions (in HTML).
+
++ Response 200
+
+        {
+            "georegion": {
+                "desc": "Geographic region(s) associated with the answer or\n    region, e.g., the rough geographic location of the datacenter\n    where your server resides.  Each region must be a string, one of\n    'US-EAST', 'US-CENTRAL', 'US-WEST', 'EUROPE', 'ASIAPAC',\n    'SOUTH-AMERICA', 'AFRICA'.  The \"georegion\" value may be a single\n    region string, or a list of several such strings to associate an\n    answer/region with multiple geographic regions.",
+                "category": "geographical",
+                "shortdesc": "Geographic region"
+            },
+            "up": {
+                "desc": "This boolean value indicates \"upness\" of answers or\n    regions.  If true (or 1), the answer/region is \"up\".  If false (or\n    0) it is \"down\".",
+                "category": "status",
+                "shortdesc": "Up/down"
+            },
+            ...
+        }
+
+### Get available filters [GET /filtertypes]
+
+Returns a list of available `FILTERS` for use in configuring dynamic records, including descriptions (in HTML), configuration options, and metadata inputs used by the filter, along with any restrictions on record types where the filter may be used.
+
++ Response 200
+
+        {
+            "up": {
+                "desc": "This filter eliminates all answers where the <code>up</code> metadata field is not <code>\"1\"</code>.",
+                "config": {},
+                "inputs": ["up"],
+                "tier": 2,
+                "shortdesc": "Removes \"down\" answers"
+            },
+            "sticky_region": {
+                "desc": "This filter first sorts regions uniquely depending on\n        the IP address of the requester, and then groups all answers\n        together by region.  The same requester always gets the same\n        ordering of regions, but answers within each region may be in\n        any order.  You can use this filter with another one like\n        <span class=\"filtername-2\">SELECT_FIRST_REGION</span> to always\n        give a user answers from the same region.  Note that this\n        filter does <i>not</i> do any geotargeting or GSLB: it sorts\n        regions randomly but consistently for each user.  Answers with\n        no region defined are considered to be in the same (empty)\n        region.",
+                "config": {},
+                "inputs": [],
+                "tier": 2,
+                "shortdesc": "Make regions \"sticky\""
+            },
+            "select_first_n": {
+                "desc": "This filter eliminates all but the first <code>N</code>\n        answers from the list.  Use this with filters like <span\n        class=\"filtername-2\">SHUFFLE</span> or <span\n        class=\"filtername-2\">SHUFFLE_WEIGHTED</span> to implement round\n        robin or weighted round robin.",
+                "config": {
+                    "N": {
+                        "desc": "Number of answers to keep",
+                        "type": "number",
+                        "shortdesc": "Number of answers",
+                        "validator": "number",
+                        "required": false,
+                        "default": "1"
+                    }
+                },
+                "inputs": [],
+                "tier": 2,
+                "shortdesc": "Return the first \"N\" answers"
+            },
+            ...
+        }
+        
+# Group Data sources and Feeds
+
+## Data sources [/data/sources/{sourceid}]
+
++ Parameters
+    + sourceid (string)
+
+### Get available data source types [GET /data/sourcetypes]
+
+Returns a list of all available data source types. For any third party data sources, you must have an account with the provider. Frequently, there are additional steps you must take with the provider to connect your data source — these are explained in the **desc** field which is HTML. Response includes any **config** options for the data source, required or optional; and any **feed_config** options for data feeds connected to the source.
+
++ Response 200
+
+        {
+            "monitis": {
+                "desc": "Monitis is a monitoring solution.  To use this data source,\n    first create a new \"URL\" contact in your Monitis account with the NSONE\n    Feed URL.  When creating data feeds, set the \"Test Name\" field to\n    the name of the test in Monitis.  Make sure you set the \"Notify when\n    back up\" rule in Monitis for all your connected tests.  Data feeds from\n    this source update the <code>up</code> metadata field.",
+                "config": {
+                    "api_key": {
+                        "desc": "Your Monitis API Key (in your Monitis dashboard, click Account, API Key)",
+                        "type": "text",
+                        "shortdesc": "Monitis API Key",
+                        "validator": "text",
+                        "required": true,
+                        "default": null
+                    },
+                    "secret_key": {
+                        "desc": "Your Monitis Secret Key (in your Monitis dashboard, click Account, API Key)",
+                        "type": "text",
+                        "shortdesc": "Monitis Secret Key",
+                        "validator": "text",
+                        "required": true,
+                        "default": null
+                    }
+                },
+                "feed_config": {
+                    "test_name": {
+                        "desc": "The name of the test in Monitis that corresponds to this feed",
+                        "type": "text",
+                        "shortdesc": "Test Name",
+                        "validator": "text",
+                        "required": true,
+                        "default": null
+                    }
+                },
+                "shortdesc": "Monitis Alert Notification"
+            },
+            "cloudwatch": {
+                "desc": "Amazon Cloudwatch is a monitoring solution for Amazon\n    Web Services.  You must configure your Cloudwatch alarms to\n    publish messages to a Simple Notification Service (SNS) topic for\n    your NSONE Feed.  First, in the SNS console, create a topic for\n    your alarms; then create an HTTPS subscription for the topic with\n    your NSONE Feed URL.  Do not associate your Data Source with more\n    than one topic in SNS (you can always create another Data Source).\n    Ensure your Cloudwatch alarms send notifications to this SNS topic\n    and specify the Alarm Name of a Cloudwatch alarm when creating a\n    new Data Feed.  Data feeds from this source update the\n    <code>up</code> metadata field.",
+                "config": {},
+                "feed_config": {
+                    "alarm_name": {
+                        "desc": "The name of the Cloudwatch Alarm that corresponds to this feed",
+                        "type": "text",
+                        "shortdesc": "Alarm Name",
+                        "validator": "text",
+                        "required": true,
+                        "default": null
+                    }
+                },
+                "shortdesc": "Cloudwatch Alarm Notification"
+            },
+            "nsone_v1": {
+                "desc": "The native NSONE data source, our own API.  Requires\n    normal NSONE API authentication via the <code>X-NSONE-Key</code>\n    header when sending requests to the Feed URL.  The body of your\n    data feed request must be a JSON object containing <b>either</b>\n    simple key/value pairs as in any normal record/region/answer\n    metadata table, e.g. <code>{\"up\": true}</code>, in which case the\n    updated values will be applied to <b>all</b> data feeds associated\n    with this data source; <b>or</b>, an object where keys match the\n    <code>label</code> for data feeds from this source, and values are\n    metadata update tables.  Data feeds from this source may update\n    any metadata field.",
+                "config": {},
+                "feed_config": {
+                    "label": {
+                        "desc": "Short/simple label for the service this feed is\n              for, like a server name, facility name, etc.",
+                        "type": "text",
+                        "shortdesc": "Label",
+                        "validator": "text",
+                        "required": true,
+                        "default": null
+                    }
+                },
+                "shortdesc": "NSONE Data Feed API v1"
+            },
+            ...
+        }
+
+### Get active data sources [GET /data/sources]
+
+Returns a list of all connected data sources, and for each data source, all connected feeds including connected metadata table **destinations**.
+
++ Response 200
+
+        [
+          {
+            "sourcetype": "nsone_v1",
+            "id": "a53252f9e583c6708331a1daeb172e12",
+            "config": {},
+            "feeds": [
+              {
+                "destinations": [
+                  {
+                    "destid": "520519509f782d58bb4df418",
+                    "desttype": "answer",
+                    "record": "520519509f782d58bb4df419"
+                  }
+                ],
+                "id": "520533b89f782d5b1a10a851",
+                "data": {
+                  "up": "true"
+                },
+                "config": {
+                  "label": "server-1"
+                },
+                "name": "Server 1 Feed"
+              },
+              {
+                "destinations": [
+                  {
+                    "destid": "5205338e9f782d5b1a10a84e",
+                    "desttype": "answer",
+                    "record": "520519509f782d58bb4df419"
+                  }
+                ],
+                "id": "520533c09f782d5b1a10a852",
+                "data": {
+                  "up": "true"
+                },
+                "config": {
+                  "label": "server-2"
+                },
+                "name": "Server 2 Feed"
+              },
+              {
+                "destinations": [
+                  {
+                    "destid": "5205338e9f782d5b1a10a84f",
+                    "desttype": "answer",
+                    "record": "520519509f782d58bb4df419"
+                  }
+                ],
+                "id": "520533dc9f782d5b1a10a854",
+                "data": {
+                  "up": "false"
+                },
+                "config": {
+                  "label": "server-8"
+                },
+                "name": "Server 8 Feed"
+              },
+              {
+                "destinations": [
+                  {
+                    "destid": "5205338e9f782d5b1a10a850",
+                    "desttype": "answer",
+                    "record": "520519509f782d58bb4df419"
+                  }
+                ],
+                "id": "520533e49f782d5b1a10a855",
+                "data": {
+                  "up": "false"
+                },
+                "config": {
+                  "label": "server-9"
+                },
+                "name": "Server 9 Feed"
+              }
+            ],
+            "name": "Example API Source",
+            "status": "ok"
+          },
+          {
+            "sourcetype": "rackspace",
+            "id": "f443e609c9a9182b3dab56b7abd74546",
+            "config": {
+              "webhook_token": "none"
+            },
+            "feeds": [
+              {
+                "destinations": [],
+                "id": "520849a99f782d5b1a10a86d",
+                "data": {
+                  "up": "false"
+                },
+                "config": {
+                  "entity_id": "enAAAAA",
+                  "alarm_id": "alAAAA"
+                },
+                "name": "server.example.com alert"
+              }
+            ],
+            "name": "My Rackspace Source",
+            "status": "ok"
+          }
+        ]
+
+### Get a single data source [GET]
+
+Returns the details for a single data source, including configuration, all connected data feeds, and within data feeds, any connected metadata table (**destinations**).
+    
++ Response 200 (application/json)
+
+        {
+          "sourcetype": "rackspace",
+          "id": "f443e609c9a9182b3dab56b7abd74546",
+          "config": {
+            "webhook_token": "none"
+          },
+          "feeds": [
+            {
+              "destinations": [],
+              "id": "520849a99f782d5b1a10a86d",
+              "data": {
+                "up": "false"
+              },
+              "config": {
+                "entity_id": "enAAAAA",
+                "alarm_id": "alAAAA"
+              },
+              "name": "server.example.com alert"
+            }
+          ],
+          "name": "My Rackspace Source",
+          "status": "ok"
+        }
+
+### Connect a new data source [PUT /data/sources]
+
+Creates a new data source. You may create multiple data sources of the same type, e.g., to correspond to different accounts with a data provider. The **config** for the source must contain fields corresponding to the **config** description in **/data/sourcetypes** for the **sourcetype** you specify. Some data sources are immediately connected; others enter a **pending** state awaiting activity from the data source, e.g., a verification request. See the documentation for the source from **/data/sourcetypes**.
+
++ Request (application/json)
+
+        {
+          "config": {
+            "secret_key": "47AOG8ATA1QNUC3H3UH2DRBXYZ",
+            "api_key": "15PSVFCXA377TGUY0FJA7T9VZY"
+          },
+          "name": "Monitor.us Example",
+          "sourcetype": "monitor_us"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "sourcetype": "monitor_us",
+          "id": "0e308ec0266d9127d166e0cbd7ceffda",
+          "config": {
+            "api_key": "15PSVFCXA377TGUY0FJA7T9VZY",
+            "secret_key": "47AOG8ATA1QNUC3H3UH2DRBXYZ"
+          },
+          "feeds": [],
+          "name": "Monitor.us Example",
+          "status": "pending"
+        }
+
+### Modify a data source [POST]
+
+Modifies basic details or configuration of a data source. You must include a JSON body in the request. You may update **name** and **config** details.
+    
++ Request (application/json)
+
+        {
+          "name": "Monitor.us New Name"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "sourcetype": "monitor_us",
+          "id": "0e308ec0266d9127d166e0cbd7ceffda",
+          "config": {
+            "api_key": "15PSVFCXA377TGUY0FJA7T9VZY",
+            "secret_key": "47AOG8ATA1QNUC3H3UH2DRBXYZ"
+          },
+          "feeds": [],
+          "name": "Monitor.us New Name",
+          "status": "ok"
+        }
+
+### Delete a data source [DELETE]
+
+Removes an existing data source and all connected feeds from the source. By extension, all metadata tables connected to those feeds will no longer receive updates. We will no longer accept updates on the Feed URL for this data source. This method has no response other than the HTTP status code.
+
++ Response 200
+
+## Data feeds [/data/feeds/{sourceid}/{feedid}]
+
++ Parameters
+    + sourceid (string)
+    + feedid (string)
+    
+### Get active data feeds for a source [GET /data/feeds/{sourceid}]
+
+Returns all data feeds connected to a source. Includes **config** details for each feed which match the **feed_config** specification from **/data/sourcetypes**, and also includes a list of metadata tables that are **destinations** for each feed.
+
++ Parameters
+    + sourceid (string)
+    
++ Response 200
+
+        [
+          {
+            "destinations": [
+              {
+                "destid": "520519509f782d58bb4df418",
+                "desttype": "answer",
+                "record": "520519509f782d58bb4df419"
+              }
+            ],
+            "id": "520533b89f782d5b1a10a851",
+            "data": {
+              "up": "true"
+            },
+            "config": {
+              "label": "server-1"
+            },
+            "name": "Server 1 Feed"
+          },
+          {
+            "destinations": [
+              {
+                "destid": "5205338e9f782d5b1a10a84e",
+                "desttype": "answer",
+                "record": "520519509f782d58bb4df419"
+              }
+            ],
+            "id": "520533c09f782d5b1a10a852",
+            "data": {
+              "up": "true"
+            },
+            "config": {
+              "label": "server-2"
+            },
+            "name": "Server 2 Feed"
+          },
+          {
+            "destinations": [
+              {
+                "destid": "5205338e9f782d5b1a10a84f",
+                "desttype": "answer",
+                "record": "520519509f782d58bb4df419"
+              }
+            ],
+            "id": "520533dc9f782d5b1a10a854",
+            "data": {
+              "up": "false"
+            },
+            "config": {
+              "label": "server-8"
+            },
+            "name": "Server 8 Feed"
+          },
+          {
+            "destinations": [
+              {
+                "destid": "5205338e9f782d5b1a10a850",
+                "desttype": "answer",
+                "record": "520519509f782d58bb4df419"
+              }
+            ],
+            "id": "520533e49f782d5b1a10a855",
+            "data": {
+              "up": "true"
+            },
+            "config": {
+              "label": "server-9"
+            },
+            "name": "Server 9 Feed"
+          }
+        ]
+
+### Get data feed details [GET]
+
+Returns the details of a single data feed, including **config** details and any **record**, **region**, or **answer** metadata table **destinations**.
+    
++ Response 200
+
+        {
+          "destinations": [
+            {
+              "destid": "5205338e9f782d5b1a10a84e",
+              "desttype": "answer",
+              "record": "520519509f782d58bb4df419"
+            }
+          ],
+          "id": "520533c09f782d5b1a10a852",
+          "data": {
+            "up": "true"
+          },
+          "config": {
+            "label": "server-2"
+          },
+          "name": "Server 2 Feed"
+        }
+
+### Connect a new data feed to a data source [PUT /data/feeds/{sourceid}]
+
+Given an existing data source, connects a new data feed to the source with a given (freeform) **name** and **config** matching the specification in **feed_config** from **/data/sourcetypes**. In this example, we connect a Rackspace Cloud Monitoring Alarm (using the Rackspace Alarm id and Entity id for the Alarm). To subsequently connect the feed to destinations (such as record answers), you should modify the record to connect a specific metadata key (which the feed is compatible with) via a feed pointer object to this feed id. See the documention for **/zones/:zone/:domain/:type**.
+
++ Parameters
+    + sourceid (string)
+
++ Request (application/json)
+
+        {
+          "config": {
+            "alarm_id": "a1AAAAA",
+            "entity_id": "enAAAAA"
+          },
+          "name": "server.example.com alert"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "destinations": [ ],
+          "id": "5208fd909f782d3d253d62ae",
+          "data": { },
+          "config": {
+            "entity_id": "enAAAAA",
+            "alarm_id": "a1AAAAA"
+          },
+          "name": "server.example.com alert"
+        }
+
+### Modify a data feed [POST]
+
+You may update **name** or **config**.
+
+To connect the feed to destinations (such as record answers), you should instead modify the record to connect a specific metadata key (which the feed is compatible with) via a feed pointer object to this feed id. See the documention for **/zones/:zone/:domain/:type**.
+    
++ Request (application/json)
+
+        {
+          "name": "new name"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "destinations": [
+            {
+              "destid": "us-east",
+              "desttype": "region",
+              "record": "520519509f782d58bb4df419"
+            },
+            {
+              "destid": "520519509f782d58bb4df418",
+              "desttype": "answer",
+              "record": "520519509f782d58bb4df419"
+            }
+          ],
+          "id": "5208fd909f782d3d253d62ae",
+          "config": {
+            "entity_id": "enAAAAA",
+            "alarm_id": "a1AAAAA"
+          },
+          "name": "new name"
+        }
+
+### Disconnect a data feed [DELETE]
+
+The feed will be disconnected from the data source and all attached destination metadata tables. The data source will not be removed and updates to remaining connected data feeds will still be processed.
+
++ Response 200
+
+### Publish data from a data source [POST /feed/{sourceid}]
+
+This is the Feed URL for a data source. Many data sources connect directly to this URL to feed data to NSONE, and in general you must configure them to do so according to the instructions for the data source (see **/data/sourcetypes**). The request sent to this URL depends on the type of the data source — usually, each data source has its own request protocol. For convenience, this URL accepts `GET`, `PUT`, and `POST` requests, but `POST` is preferred.
+
+You can feed data to the Feed URL directly for your NSONE API data sources (**sourcetype** of **nsone_v1**), as shown in the example.
+
+Updates sent to the Feed URL that match any data feeds connected to the data source are applied to all **destinations** in the feeds and pushed out to our DNS network instantly.
+
+There is no response other than the HTTP status code.
+
++ Parameters
+    + sourceid (string)
+    
++ Request (application/json)
+
+        {
+          "server-1": {
+            "up": false
+          },
+          "server-2": {
+            "up": true
+          }
+        }
+
++ Response 200
+
+# Group Monitoring and Notifications
+
+## Monitoring Jobs [/monitoring/jobs/{jobid}]
+
++ Parameters
+    + jobid (string)
+    
+### List monitoring jobs [GET /monitoring/jobs]
+
+Returns the list of all monitoring jobs for the account, including configuration and current status details. Job status is shown per region, including the "global" region indicating the overal status of the monitoring job computed based on the status **policy** from the regional statuses. Status values both globally and per region include **up**, **down**, and **pending**.
+    
++ Response 200 (application/json)
+
+        [
+          {
+            "id": "52a27d4397d5f07003fdbe7b",
+            "config": {
+              "host": "1.2.3.4"
+            },
+            "status": {
+              "lga": {
+                "since": 1389407609,
+                "status": "up"
+              },
+              "global": {
+                "since": 1389407609,
+                "status": "up"
+              },
+              "sjc": {
+                "since": 1389404014,
+                "status": "up"
+              }
+            },
+            "rules": [
+              {
+                "key": "rtt",
+                "value": 100,
+                "comparison": "<"
+              }
+            ],
+            "job_type": "ping",
+            "regions": [
+              "lga",
+              "sjc"
+            ],
+            "active": true,
+            "frequency": 60,
+            "policy": "quorum",
+            "region_scope": "fixed"
+          },
+          ...
+        ]
+
+### Get a monitoring job's details [GET]
+
+Returns details for a specific monitoring jobs based on its id, including configuration and current status details. Job status is shown per region, including the "global" region indicating the overal status of the monitoring job computed based on the status **policy** from the regional statuses. Status values both globally and per region include **up**, **down**, and **pending**.
+
++ Response 200 (application/json)
+
+        {
+          "notes": null,
+          "name": "example.com:80",
+          "notify_repeat": 0,
+          "id": "52cae678830f7809ec5c9f6b",
+          "region_scope": "fixed",
+          "rapid_recheck": false,
+          "frequency": 30,
+          "job_type": "tcp",
+          "notify_delay": 0,
+          "notify_list": null,
+          "notify_regional": false,
+          "regions": [
+            "ams"
+          ],
+          "policy": "quorum",
+          "config": {
+            "send": "HEAD / HTTP/1.0\r\n\r\n",
+            "port": 80,
+            "host": "1.2.3.4",
+            "ssl": "0"
+          },
+          "status": {
+            "ams": {
+              "since": 1389052665,
+              "status": "down"
+            },
+            "global": {
+              "since": 1389052665,
+              "status": "down"
+            }
+          },
+          "notify_failback": true,
+          "rules": [
+            {
+              "value": "200 OK",
+              "key": "output",
+              "comparison": "contains"
+            }
+          ],
+          "active": true
+        }
+        
+### Create a new monitoring job [PUT /monitoring/jobs]
+
+Initiate a new monitoring job. A variety of configuration details can be set in the monitoring job request body, including:
+
+- **name**: A free-form display name for the monitoring job.
+- **active**: A boolean indicating if the job is active or temporarily disabled.
+- **region_scope**: Controls behavior of how the job is assigned to monitoring regions. Currently this must be **fixed** — indicating monitoring regions are explicitly chosen.
+- **regions**: A list of region codes in which to run the monitoring job. Available monitoring regions are provided by **/monitoring/regions**. The number of regions you may specify depends on your account type and billing plan.
+- **job_type**: The type of monitoring job to be run. A list of available types is given by **/monitoring/jobtypes**.
+- **frequency**: The frequency, in seconds, at which to run the monitoring job in each region. The minimum frequency depends on your account type and billing plan.
+- **rapid_recheck**: A boolean, default **false**. If **true**, on any apparent state change, the job is quickly re-run after one second to confirm the state change before notification.
+- **policy**: The policy for determining the monitor's global status based on the status of the job in all regions. May be **quorum** (majority status); **all** (status change only when all regions are in agreement); or **one** (down if any region is down).
+- **notes**: Freeform notes to be included in any notifications about this job, e.g., instructions for operators who will receive the notifications.
+- **config**: A configuration dictionary with keys and values depending on the **job_type**. Configuration details for each **job_type** are indicated by **/monitoring/jobtypes**.
+- **rules**: A list of rules for determining failure conditions. Each rule acts on one of the outputs from the monitoring job. You must specify **key** (the output key); **comparison** (a comparison to perform on the the output); and **value** (the value to compare to). For example, **{"key":"rtt", "comparison":"<", "value":100}** is a rule requiring the **rtt** from a job to be under 100ms, or the job will be marked failed. Available output keys, comparators, and value types are indicated by **/monitoring/jobtypes**.
+- **notify_delay**: time in seconds after a failure to wait before sending a notification. If the job is marked "up" before this time expires, no notification is sent. Set to 0 to send a notification immediately upon failure.
+- **notify_repeat**: time in seconds between repeat notifications of a failed job. Set to 0 to disable repeating notifications. Otherwise the value must be greater than or equal to 60.
+- **notify_failback**: boolean. If **true**, a notification is sent when a job returns to an "up" state.
+- **notify_regional**: boolean. If **true**, notifications are sent for any regional failure (and failback if desired), in addition to global state notifications.
+- **notify_list**: The id of the notification list to send notifications to. If no list is specified, no notifications will be sent for this job.
+
++ Request
+
+        {
+          "notify_list": "52cc775a2db1561b55135327",
+          "notify_regional": false,
+          "notify_failback": true,
+          "notify_repeat": 0,
+          "notify_delay": 65,
+          "rules": [
+            {
+              "value": "200 OK",
+              "comparison": "contains",
+              "key": "output"
+            },
+            {
+              "value": 200,
+              "comparison": "<=",
+              "key": "connect"
+            }
+          ],
+          "config": {
+            "ssl": "1",
+            "send": "HEAD / HTTP/1.0\r\n\r\n",
+            "port": 443,
+            "host": "1.2.3.4"
+          },
+          "job_type": "tcp",
+          "name": "myhost.com:443 monitor",
+          "active": true,
+          "rapid_recheck": true,
+          "region_scope": "fixed",
+          "regions": [
+            "lga",
+            "sjc"
+          ],
+          "frequency": 30,
+          "policy": "quorum",
+          "notes": "If this monitor is down then the webserver on myhost.com:443 is down or too slow!"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "status": {
+            "global": {
+              "since": 1389458558,
+              "status": "pending"
+            }
+          },
+          "notes": "If this monitor is down then the webserver on myhost.com:443 is down or too slow!",
+          "policy": "quorum",
+          "frequency": 30,
+          "regions": [
+            "lga",
+            "sjc"
+          ],
+          "region_scope": "fixed",
+          "active": true,
+          "rapid_recheck": true,
+          "name": "myhost.com:443 monitor",
+          "job_type": "tcp",
+          "config": {
+            "ssl": "1",
+            "send": "HEAD / HTTP/1.0\r\n\r\n",
+            "port": 443,
+            "host": "1.2.3.4"
+          },
+          "rules": [
+            {
+              "value": "200 OK",
+              "comparison": "contains",
+              "key": "output"
+            },
+            {
+              "value": 200,
+              "comparison": "<=",
+              "key": "connect"
+            }
+          ],
+          "notify_delay": 65,
+          "notify_repeat": 0,
+          "notify_failback": true,
+          "notify_regional": false,
+          "notify_list": "52cc775a2db1561b55135327",
+          "id": "52cc79123db8711b6713554a"
+        }
+        
+### Update details of a monitoring job [POST]
+
+Change the configuration details of an existing monitoring job. See the documentation for `PUT` **/monitoring/jobs** for a detailed explanation of the input.
+
++ Request
+
+        {
+          "notes": "Some new notes for this job",
+          "policy": "all",
+          "frequency": 40
+        }
+
++ Response 200 (application/json)
+
+        {
+          "status": {
+            "global": {
+              "since": 1389458558,
+              "status": "pending"
+            }
+          },
+          "notes": "Some new notes for this job",
+          "policy": "all",
+          "frequency": 40,
+          "regions": [
+            "lga",
+            "sjc"
+          ],
+          "region_scope": "fixed",
+          "active": true,
+          "rapid_recheck": false,
+          "name": "myhost.com:443 monitor",
+          "job_type": "tcp",
+          "config": {
+            "ssl": "1",
+            "send": "HEAD / HTTP/1.0\r\n\r\n",
+            "port": 443,
+            "host": "1.2.3.4"
+          },
+          "rules": [
+            {
+              "value": "200 OK",
+              "comparison": "contains",
+              "key": "output"
+            },
+            {
+              "value": 200,
+              "comparison": "<=",
+              "key": "connect"
+            }
+          ],
+          "notify_delay": 65,
+          "notify_repeat": 0,
+          "notify_failback": true,
+          "notify_regional": false,
+          "notify_list": "52cc775a2db1561b55135327",
+          "id": "52cc79123db8711b6713554a"
+        }
+        
+### Remove a monitoring job [DELETE]
+
+Immediately terminates and deletes an existing monitoring job. There is no response other than the HTTP status code.
+
++ Response 200
+
+### Get historical status of monitoring job [GET /monitoring/history/{jobid}{?start,end,period,limit,region,exact}]
+
+Returns historical status details of a monitoring job (if **jobid** is included in the URL) or of all monitoring jobs under the account (if no **jobid** is specified). You may restrict the time period to show with **start** and **end** (Unix timestamps) or by specifying a **period** (one of **1h**, **24h**, or **30d**); limit the number of results with **limit**; and restrict to results from a specific **region** code. You may also specify **exact** (a boolean, if **true** you must also specify **start**): then, the status as of the exact start and end times is computed and returned as part of the status history.
+
++ Parameters
+    + jobid (string)
+    + start (number, optional) - Absolute start time in UNIX timestamp.
+    + end (number, optional) - Absolute end time in UNIX timestamp (defaults to current time).
+    + period: `24h` (string, optional)
+        + Members
+            + `1h`
+            + `24h`
+            + `30d`
+    + limit (number, optional) - Maximum number of results
+    + region: `global` (string, optional) - Region code
+    + exact (boolean, optional)
+    
++ Response 200 (application/json)
+
+        [
+          {
+            "job": "52a27d4397d5f07003fdbe7b",
+            "since": 1389407609,
+            "until": null,
+            "region": "global",
+            "status": "up"
+          },
+          {
+            "job": "52a27d4397d5f07003fdbe7b",
+            "since": 1389407604,
+            "until": 1389407609,
+            "region": "global",
+            "status": "down"
+          },
+          {
+            "job": "52a27d4397d5f07003fdbe7b",
+            "since": 1389404014,
+            "until": 1389407604,
+            "region": "global",
+            "status": "up"
+          },
+          {
+            "job": "52a27d4397d5f07003fdbe7b",
+            "since": 1389404010,
+            "until": 1389404014,
+            "region": "global",
+            "status": "down"
+          },
+          {
+            "job": "52a27d4397d5f07003fdbe7b",
+            "since": 1389403924,
+            "until": 1389404010,
+            "region": "global",
+            "status": "up"
+          },
+          ...
+        ]
+
+### Get historical metrics for monitoring job [GET /monitoring/metric/{jobid}{?region,metric,period}]
+
+Returns historical metrics generated by monitoring jobs, such as response time, packet loss, TCP connect time, etc. The metrics in the response depend on the job — metrics available for each job type are returned by **/monitoring/jobtypes**. If you include a **jobid** in the URL, only metrics for that job are returned; otherwise, metrics for all jobs are returned subject to the other filtering parameters, which include:
+
+- **region**: a region code; may be either **global** or a specific region as listed in **/monitoring/regions**. *You may only specify this parameter if you also specify a specific **jobid***. Only metrics from the specific region are returned. If **global**, the average value of the metric across all active regions is returned.
+- **metric**: a metric name, e.g. **rtt** or **connect**. Valid metric names are described by **/monitoring/jobtypes** and depend on the type of monitoring job. Only metrics for jobs providing a matching metric name will be returned.
+- **period**: one of **1h**, **24h**, or **30d** depending on the length of history you wish to retrieve. The number and interval of the data po
+s returned depends on the period.
+The response is a list of "metrics" objects, each containing **jobid**, **region**, and **metrics** fields. The **metric** field is a mapping of metric names to statistics objects including the average value of the metric over the period (excluding times when no data was collected), and a graph for the metric over the period.
+
++ Parameters
+    + jobid (string)
+    + region: `global` (string, optional) - Region code
+    + metric: `rtt` (string, optional)
+    + period: `30d` (string, optional)
+        + Members
+            + `1h`
+            + `24h`
+            + `30d`
+    
++ Response 200 (application/json)
+
+        [
+          {
+            "jobid": "52a27d4397d5f07003fdbe7b",
+            "region": "global",
+            "metrics": {
+              "rtt": {
+                "avg": 36.49545722537571,
+                "graph": [
+                  [
+                    1390852209,
+                    36.93605295817057
+                  ],
+                  [
+                    1390852420,
+                    34.418270111083984
+                  ],
+                  [
+                    1390852631,
+                    36.07466252644857
+                  ],
+                  ...
+                ]
+              }
+            }
+          },
+          {
+            "jobid": "52a27d4397d5f07003fdbe7b",
+            "region": "lga",
+            "metrics": {
+              "rtt": {
+                "avg": 36.338624795277916,
+                "graph": [
+                  [
+                    1390852209,
+                    36.93605295817057
+                  ],
+                  [
+                    1390852420,
+                    34.418270111083984
+                  ],
+                  [
+                    1390852631,
+                    36.07466252644857
+                  ],
+                  ...
+                ]
+              }
+            }
+          },
+          {
+            "jobid": "52a27d4397d5f07003fdbe7b",
+            "region": "dal",
+            "metrics": {
+              "rtt": {
+                "avg": 37.40758143530952,
+                "graph": [
+                  [
+                    1390852209,
+                    36.93605295817057
+                  ],
+                  [
+                    1390852420,
+                    36.93605295817057
+                  ],
+                  [
+                    1390852631,
+                    36.93605295817057
+                  ],
+                  ...
+                ]
+              }
+            }
+          }
+        ]
+
+### List available monitoring job types [GET /monitoring/jobtypes]
+
+Returns the list of all available monitoring jobs types, and details of configuration options for each job type.
+
++ Response 200 (application/json)
+
+        {
+          "tcp": {
+            "desc": "Connect to a TCP port on a host.",
+            "results": {
+              "connect": {
+                "desc": "Time (in ms) for the connection to open.",
+                "type": "number",
+                "shortdesc": "Time to connect",
+                "validator": "number",
+                "metric": true,
+                "comparators": [
+                  "<",
+                  ">",
+                  "<=",
+                  ">=",
+                  "==",
+                  "!="
+                ]
+              },
+              "output": {
+                "desc": "Output received from the connection, if any.",
+                "type": "string",
+                "shortdesc": "Output (if any)",
+                "validator": "string",
+                "metric": false,
+                "comparators": [
+                  "contains"
+                ]
+              }
+            },
+            "config": {
+              "port": {
+                "validator": "number",
+                "type": "number",
+                "required": true,
+                "desc": "TCP port to connect to on host.",
+                "shortdesc": "TCP port"
+              },
+              "host": {
+                "validator": "text",
+                "type": "string",
+                "required": true,
+                "desc": "IP address or hostname to connect to.",
+                "shortdesc": "IP address or hostname"
+              },
+              "ssl": {
+                "desc": "Attempt to negotiate an SSL connection before sending/receiving protocol data.",
+                "type": "checkbox",
+                "shortdesc": "Connect with SSL",
+                "validator": "checkbox",
+                "required": false,
+                "default": false
+              },
+              "connect_timeout": {
+                "desc": "Timeout (in ms) before we give up trying to connect.",
+                "type": "number",
+                "shortdesc": "Connect timeout",
+                "validator": "number",
+                "required": false,
+                "default": 2000
+              },
+              "send": {
+                "desc": "A string to send to the host upon connecting.",
+                "type": "string",
+                "shortdesc": "String to send",
+                "validator": "string",
+                "required": false,
+                "default": null
+              },
+              "response_timeout": {
+                "desc": "Timeout (in ms) after connecting to wait for output.",
+                "type": "number",
+                "shortdesc": "Response timeout",
+                "validator": "number",
+                "required": false,
+                "default": 1000
+              }
+            },
+            "shortdesc": "TCP"
+          },
+          "ping": {
+            "desc": "Ping a host using ICMP packets.",
+            "results": {
+              "loss": {
+                "desc": "Percentage of ICMP echo packets with no response (timed out).",
+                "type": "number",
+                "shortdesc": "Percent packet loss",
+                "validator": "number",
+                "metric": true,
+                "comparators": [
+                  "<",
+                  ">",
+                  "<=",
+                  ">=",
+                  "==",
+                  "!="
+                ]
+              },
+              "rtt": {
+                "desc": "Average round trip time (in ms) of returned pings.",
+                "type": "number",
+                "shortdesc": "Round trip time",
+                "validator": "number",
+                "metric": true,
+                "comparators": [
+                  "<",
+                  ">",
+                  "<=",
+                  ">=",
+                  "==",
+                  "!="
+                ]
+              }
+            },
+            "config": {
+              "timeout": {
+                "desc": "Timeout (in ms) before we mark host failed.",
+                "type": "number",
+                "shortdesc": "Ping timeout",
+                "validator": "number",
+                "required": false,
+                "default": 2000
+              },
+              "interval": {
+                "desc": "Minimum time (in ms) to wait between sending each ICMP packet.  If less than the response time for an echo request, we will send the next packet immediately upon receiving a response.",
+                "type": "number",
+                "shortdesc": "Time between packets",
+                "validator": "number",
+                "required": false,
+                "default": 0
+              },
+              "host": {
+                "validator": "text",
+                "type": "string",
+                "required": true,
+                "desc": "IP address or hostname to test using ICMP echo packets.",
+                "shortdesc": "IP address or hostname to ping"
+              },
+              "count": {
+                "desc": "Number of ICMP echo packets to send.  More take longer, but provide better RTT and packet loss statistics.",
+                "type": "number",
+                "shortdesc": "Number of packets to send",
+                "validator": "number",
+                "required": false,
+                "default": 4
+              }
+            },
+            "shortdesc": "Ping (ICMP)"
+          }
+        }
+
+### List available monitoring regions [GET /monitoring/regions]
+
+Returns the list of all available monitoring regions, including display **name** for the region, the region **code** to use when provisioning, and the list of all **subnets** from which monitoring traffic is generated in each region. The response below is using subnets from the documentation address blocks (RFC 5737 and RFC 3849) do not use them in your access lists.
+
++ Response 200 (application/json)
+        
+        [
+          {
+            "name": "Dallas",
+            "code": "dal",
+            "subnets": [
+              "192.0.2.40/29",
+              "2001:db8:4009:3::/64"
+            ]
+          },
+          {
+            "name": "Singapore",
+            "code": "sin",
+            "subnets": [
+              "198.51.100.224/29",
+              "2001:db8:1000:3::/64"
+            ]
+          },
+          {
+            "name": "San Jose",
+            "code": "sjc",
+            "subnets": [
+              "192.0.2.152/29",
+              "2001:db8:400c:3::/64"
+            ]
+          },
+          {
+            "name": "New York",
+            "code": "lga",
+            "subnets": [
+              "203.0.113.16/29",
+              "2001:db8:4004:3::/64"
+            ]
+          },
+          {
+            "name": "Amsterdam",
+            "code": "ams",
+            "subnets": [
+              "203.0.113.48/29",
+              "2001:db8:e:3::/64"
+            ]
+          }
+        ]
+
+## Notification lists [/lists/{listid}]
+
++ Parameters
+    + listid (string) - Notification list id
+    
+### List all notification lists [GET /lists]
+
+Returns all configured notification lists. Each list consists of a **name**, an **id** for use in connecting notification lists in monitoring jobs, and a **notify_list** of configured notifiers.
+
++ Response 200 (application/json)
+
+        [
+          {
+            "id": "52b49af12f21574b0e0bffe7",
+            "name": "Awesome List",
+            "notify_list": [
+              {
+                "type": "email",
+                "config": {
+                  "email": "email+notify@gmail.com"
+                }
+              },
+              {
+                "type": "datafeed",
+                "config": {
+                  "sourceid": "5872814cc08b23c697e88c054d032780"
+                }
+              },
+              {
+                "type": "user",
+                "config": {
+                  "user": "myuser"
+                }
+              }
+            ]
+          },
+          ...
+        ]
+
+### Get details of a notification list [GET]
+
+Gets the details and notifiers associated with a specific notification list.
+
++ Response 200 (application/json)
+
+        {
+          "id": "52b49af12f21574b0e0bffe7",
+          "name": "Awesome List",
+          "notify_list": [
+            {
+              "type": "email",
+              "config": {
+                "email": "email+notify@gmail.com"
+              }
+            },
+            {
+              "type": "datafeed",
+              "config": {
+                "sourceid": "5872814cc08b23c697e88c054d032780"
+              }
+            },
+            {
+              "type": "user",
+              "config": {
+                "user": "myuser"
+              }
+            }
+          ]
+        }
+
+### Create a new notification list [PUT /lists]
+
+Creates a new list for notifications. You may specify a freeform display **name** for the list. The **notify_list** itself is a list of notifier objects including notifier **type** and a **config** dictionary with configuration details for the given notifier type. Available notifiers are indicated in **/notifytypes**. All notifiers in a notification list will receive notifications whenever an event is send to the list (e.g., when a monitoring job fails).
+
++ Request
+
+        {
+          "name": "My Notification List",
+          "notify_list": [
+            {
+              "config": {
+                "email": "email+notify@gmail.com"
+              },
+              "type": "email"
+            },
+            {
+              "config": {
+                "user": "myuser"
+              },
+              "type": "user"
+            },
+            {
+              "config": {
+                "sourceid": "01f6495ba8eb9d3ac40963db97ab5604"
+              },
+              "type": "datafeed"
+            }
+          ]
+        }
+
++ Response 200 (application/json)
+
+        {
+          "id": "52b49af12f21574b0e0bffe8",
+          "name": "My Notification List",
+          "notify_list": [
+            {
+              "config": {
+                "email": "email+notify@gmail.com"
+              },
+              "type": "email"
+            },
+            {
+              "config": {
+                "user": "myuser"
+              },
+              "type": "user"
+            },
+            {
+              "config": {
+                "sourceid": "01f6495ba8eb9d3ac40963db97ab5604"
+              },
+              "type": "datafeed"
+            }
+          ]
+        }
+
+### Update a notification list [POST]
+
+Add or remove entries or otherwise update a notification list.
+
++ Request
+
+        {
+          "id": "52b49af12f21574b0e0bffe8",
+          "name": "My Notification List",
+          "notify_list": [
+            {
+              "config": {
+                "email": "email+notify@gmail.com"
+              },
+              "type": "email"
+            },
+            {
+              "config": {
+                "user": "myuser"
+              },
+              "type": "user"
+            },
+            {
+              "config": {
+                "sourceid": "01f6495ba8eb9d3ac40963db97ab5604"
+              },
+              "type": "datafeed"
+            },
+            {
+              "config": {
+                "email": "another.email@gmail.com"
+              },
+              "type": "email"
+            }
+          ]
+        }
+        
++ Response 200 (application/json)
+
+        {
+          "id": "52b49af12f21574b0e0bffe8",
+          "name": "My Notification List",
+          "notify_list": [
+            {
+              "config": {
+                "email": "email+notify@gmail.com"
+              },
+              "type": "email"
+            },
+            {
+              "config": {
+                "user": "myuser"
+              },
+              "type": "user"
+            },
+            {
+              "config": {
+                "sourceid": "01f6495ba8eb9d3ac40963db97ab5604"
+              },
+              "type": "datafeed"
+            },
+            {
+              "config": {
+                "email": "another.email@gmail.com"
+              },
+              "type": "email"
+            }
+          ]
+        }
+        
+### Remove a notification list [DELETE]
+
+Immediately deletes an existing notification list. Any monitoring jobs configured to notify this list will stop sending notifications until reconfigured to notify a different list. There is no response other than the HTTP status code.
+
++ Response 200
+
+### List available notification types [GET /notifytypes]
+
+Returns the list of all available notifiers for delivery of monitoring status notifications, and details of configuration options for each notification type.
+
++ Response 200 (application/json)
+
+        {
+          "user": {
+            "desc": "Send notification to a user according to their notification preferences.",
+            "config": {
+              "user": {
+                "validator": "username",
+                "type": "string",
+                "required": true,
+                "desc": "User to notify",
+                "shortdesc": "Username"
+              }
+            },
+            "shortdesc": "User"
+          },
+          "email": {
+            "desc": "Send notification to an email address.",
+            "config": {
+              "email": {
+                "validator": "email",
+                "type": "string",
+                "required": true,
+                "desc": "Email address to send notification",
+                "shortdesc": "Email address"
+              }
+            },
+            "shortdesc": "Email"
+          },
+          "datafeed": {
+            "desc": "Push notification to an NSONE Data Source to update all\n    Data Feeds connected to the Source.  This notifier only pushes\n    \"up/down\" status to the Data Feeds.  Unless you have configured\n    a Feed to act on updates from specific monitoring regions,\n    only \"global\" status will be pushed to your Feeds.",
+            "config": {
+              "sourceid": {
+                "validator": "datasource",
+                "type": "datasource",
+                "required": true,
+                "desc": "NSONE Data Source to receive notifications",
+                "shortdesc": "NSONE Data Source"
+              }
+            },
+            "shortdesc": "NSONE Data Feed"
+          },
+          ...
+        }
+
+# Group Account management
+
+## General [/account]
+
+### Get account contact details and settings [GET /account/settings]
+
+Returns the basic contact details associated with your account.
+
++ Response 200 (application/json)
+
+        {
+          "email": "support@ns1.com",
+          "address": {
+            "country": "US",
+            "street": "Some Address Suite 2100",
+            "state": "NY",
+            "city": "New York",
+            "postalcode": "10005"
+          },
+          "phone": "",
+          "customerid": 5309,
+          "company": "NSONE API Example Account",
+          "lastname": "Example",
+          "firstname": "API"
+        }
+
+### Modify account contact details and settings [POST /account/settings]
+
+You may change most of your basic contact details, except **customerid**.
+
++ Request
+
+        {
+          "lastname": "Smith",
+          "firstname": "John"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "email": "support@nsone.net",
+          "address": {
+            "country": "US",
+            "street": "Some Address Suite 2100",
+            "state": "NY",
+            "city": "New York",
+            "postalcode": "10005"
+          },
+          "phone": "",
+          "customerid": 5309,
+          "company": "NSONE API Example Account",
+          "lastname": "Smith",
+          "firstname": "John"
+        }
+
+### Get overage alerting settings [GET /account/usagewarnings]
+
+Returns toggles and thresholds used when sending overage warning alert messages to users with billing notifications enabled.
+
++ Response 200 (application/json)
+
+        {
+          "queries": {
+            "send_warnings": true,
+            "warning_2": 90,
+            "warning_1": 80
+          },
+          "records": {
+            "send_warnings": false,
+            "warning_2": 80,
+            "warning_1": 50
+          }
+        }
+        
+### Modify overage alerting settings [POST /account/usagewarnings]
+
+Changes alerting toggles and thresholds for overage warning alert messages. First thresholds (**warning_1**) must be smaller than second ones (**warning_2**) and all thresholds must be percentages between 0 and 100.
+
++ Request
+
+        {
+          "queries": {
+            "warning_2": 90
+          }
+        }
+
++ Response 200 (application/json)
+
+        {
+          "queries": {
+            "send_warnings": true,
+            "warning_2": 90,
+            "warning_1": 60
+          },
+          "records": {
+            "send_warnings": false,
+            "warning_2": 80,
+            "warning_1": 50
+          }
+        }
+
+## User [/account/users/{username}]
+
++ Parameter
+    + username (string)
+    
+### Get all account users [GET /account/users]
+
+Returns a list of all users with access to the account. Notification settings (**notify**) and access restrictions (**permissions**) are included. If any specific access right is omitted from **permissions** then it defaults to **true** (allowed). In the example below, "New User" is only allowed to manage the **example.com** zone and can do nothing else in the account; "API Example" has full permissions.
+
+Users may belong to "Teams" in which case they inherit the permissions of the Teams. If a user belongs to multiple Teams, then they inherit the union of permissions of the Teams they belong to. For example, if a user belongs to two Teams, and one Team has the **dns.manage_zones** permission and the other does not, then the user *will* have that permission.
+
+If a user *does not* belong to any Teams, then their permissions may be modified directly and are just for them. If a user *does* belong to one or more Teams, then the permissions returned with the user are the computed permissions from all the Teams to which they belong and may not be modified directly (instead, modify the relevant Team permissions).
+
++ Response 200 (application/json)
+
+        [
+          {
+            "permissions": {},
+            "teams": [],
+            "email": "support@nsone.net",
+            "last_access": 1376325771,
+            "notify": {
+              "billing": true
+            },
+            "name": "API Example",
+            "username": "apiexample",
+            "ip_whitelist_strict": false,
+            "ip_whitelist": []
+          },
+          {
+            "permissions": {
+              "dns": {
+                "view_zones": true,
+                "manage_zones": true,
+                "zones_allow_by_default": false,
+                "zones_deny": [],
+                "zones_allow": ["example.com"]
+              },
+              "data": {
+                "push_to_datafeeds": false,
+                "manage_datasources": false,
+                "manage_datafeeds": false
+              },
+              "account": {
+                "manage_payment_methods": false,
+                "manage_plan": false,
+                "manage_teams": false,
+                "manage_apikeys": false,
+                "manage_account_settings": false,
+                "view_activity_log": false,
+                "view_invoices": false,
+                "manage_users": false
+              },
+              "teams": ["520422919f782d37dffb588a"],
+              "monitoring": {
+                "manage_lists": false,
+                "manage_jobs": false,
+                "view_jobs": false
+              }
+            },
+            "email": "newuser@example.com",
+            "last_access": null,
+            "notify": {
+              "billing": true
+            },
+            "name": "New User",
+            "username": "newuser",
+            "ip_whitelist_strict": false,
+            "ip_whitelist": []
+          }
+        ]
+
+### Get a user's details [GET]
+
+Returns the details for a single user.
+
++ Response 200 (application/json)
+
+        {
+          "permissions": {
+            "dns": {
+              "view_zones": true,
+              "manage_zones": true,
+              "zones_allow_by_default": false,
+              "zones_deny": [],
+              "zones_allow": ["example.com"]
+            },
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datasources": false,
+              "manage_datafeeds": false
+            },
+            "account": {
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_account_settings": false,
+              "view_activity_log": false,
+              "view_invoices": false,
+              "manage_users": false
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "teams": ["520422919f782d37dffb588a"],
+          "email": "newuser@example.com",
+          "last_access": null,
+          "notify": {
+            "billing": true
+          },
+          "name": "New User",
+          "username": "newuser",
+          "ip_whitelist_strict": false,
+          "ip_whitelist": []
+        }
+
+### Add a user to account [PUT]
+
+Creates a new user. An invitation email will be sent to the user's email address, which they can click to set a password and log into **my.nsone.net**. The user cannot log in until they accept the invitation and set a password.
+
+If you add the user to one or more Teams, they will inherit the permissions of those teams and any permissions you include in the request body will be ignored. If the user is not added to any Teams, then you may explicitly set permissions for the user. You can restrict access to this user by adding IP addresses or CIDR blocks in the **ip_whitelist** array property. i.e. **ip_whitelist: ['104.20.48.182', '104.20.49.0/24']**.
+
++ Request
+
+        {
+          "username": "newuser",
+          "email": "newuser@example.com",
+          "name": "New User",
+          "teams": [],
+          "permissions": {
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datafeeds": false,
+              "manage_datasources": false
+            },
+            "account": {
+              "view_invoices": false,
+              "view_activity_log": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_users": false,
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_account_settings": false
+            },
+            "dns": {
+              "zones_allow": [
+                "example.com"
+              ],
+              "zones_allow_by_default": false,
+              "manage_zones": false,
+              "view_zones": true
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          }
+        }
+
++ Response 200 (application/json)
+
+        {
+          "permissions": {
+            "dns": {
+              "view_zones": true,
+              "manage_zones": true,
+              "zones_allow_by_default": false,
+              "zones_deny": [],
+              "zones_allow": ["example.com"]
+            },
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datasources": false,
+              "manage_datafeeds": false
+            },
+            "account": {
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_account_settings": false,
+              "view_activity_log": false,
+              "view_invoices": false,
+              "manage_users": false
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "teams": [],
+          "email": "newuser@example.com",
+          "last_access": null,
+          "notify": {
+            "billing": true
+          },
+          "name": "New User",
+          "username": "newuser",
+          "ip_whitelist_strict": false,
+          "ip_whitelist": []
+        }
+        
+### Update a user's details [POST]
+
+Change contact details, notification settings, or access rights for a user.
+
+If the user belongs to any Teams or you are adding the user to their first Team, you may not directly set permissions for the user. If you are removing the user from all Teams to which they belong, and you do not explicitly set permissions, their permissions will be set equivalently to what they were as a member of the Teams. You can restrict access to this user by adding IP addresses or CIDR blocks in the **ip_whitelist** array property. i.e. **ip_whitelist: ['104.20.48.182', '104.20.49.0/24']**.
+
++ Request
+
+        {
+          "name": "Jane Smith"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "permissions": {
+            "dns": {
+              "view_zones": true,
+              "manage_zones": true,
+              "zones_allow_by_default": false,
+              "zones_deny": [],
+              "zones_allow": ["example.com"]
+            },
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datasources": false,
+              "manage_datafeeds": false
+            },
+            "account": {
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_account_settings": false,
+              "view_activity_log": false,
+              "view_invoices": false,
+              "manage_users": false
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "teams": [],
+          "email": "newuser@example.com",
+          "last_access": null,
+          "notify": {
+            "billing": true
+          },
+          "name": "Jane Smith",
+          "username": "newuser",
+          "ip_whitelist_strict": false,
+          "ip_whitelist": []
+        }
+
+### Remove a user [DELETE]
+
+Deletes a user from the account. They will no longer be able to log into **my.nsone.net**. There is no response other than the HTTP status code.
+
++ Response 200
+
+### Resend invitation to a user [POST /account/reinvite/{username}]
+
+In case a new user did not receive their invitation email, or in case the invitation has expired, you may re-send the invitation. However, if the user has already logged in, you may not re-send the invitation — they should click the "Forgot Password" link to verify their email address and reset their password. There is no response other than the HTTP status code.
+
++ Parameter
+    + username (string)
+
++ Response 200
+
+## API Key [/account/apikeys/{keyid}]
+
++ Parameter
+    + keyid (string)
+    
+### Get all API Keys [GET /account/apikeys]
+
+Returns a list of all API Keys under the account, including access rights (**permissions**) and the actual **key** to be used when contacting the NSONE API. API Keys may belong to Teams with the same semantics as Users.
+
++ Response 200 (application/json)
+
+        [
+          {
+            "permissions": {
+              "dns": {
+                "zones_allow_by_default": true,
+                "view_zones": true,
+                "zones_deny": [],
+                "manage_zones": true,
+                "zones_allow": []
+              },
+              "data": {
+                "push_to_datafeeds": true,
+                "manage_datasources": true,
+                "manage_datafeeds": true
+              },
+              "account": {
+                "manage_payment_methods": true,
+                "manage_plan": true,
+                "manage_teams": true,
+                "manage_apikeys": true,
+                "manage_account_settings": true,
+                "view_activity_log": true,
+                "view_invoices": true,
+                "manage_users": true
+              },
+              "monitoring": {
+                "manage_lists": false,
+                "manage_jobs": false,
+                "view_jobs": false
+              }
+            },
+            "teams": [],
+            "id": "520422919f782d37dffb588a",
+            "last_access": null,
+            "key": "rifGeRNMshCOKwlaYBcu",
+            "name": "API Example App",
+            "ip_whitelist_strict": false,
+            "ip_whitelist": []
+          },
+          {
+            "permissions": {
+              "dns": {
+                "zones_allow_by_default": false,
+                "view_zones": true,
+                "manage_zones": false,
+                "zones_allow": [
+                  "example.com"
+                ]
+              },
+              "data": {
+                "push_to_datafeeds": false,
+                "manage_datasources": false,
+                "manage_datafeeds": false
+              },
+              "account": {
+                "manage_payment_methods": false,
+                "manage_plan": false,
+                "manage_teams": false,
+                "manage_apikeys": false,
+                "manage_account_settings": false,
+                "view_activity_log": false,
+                "view_invoices": false,
+                "manage_users": false
+              },
+              "monitoring": {
+                "manage_lists": false,
+                "manage_jobs": false,
+                "view_jobs": false
+              }
+            },
+            "teams": ["52276047830f787e2ff88d4c"],
+            "id": "520845159f782d5b1a10a86a",
+            "last_access": null,
+            "key": "MoEN3FJdcGelNSHHvKeO",
+            "name": "My Application",
+            "ip_whitelist_strict": false,
+            "ip_whitelist": []
+          }
+        ]
+
+### Get an API Key's details [GET]
+
+Returns details, including **permissions**, for a single API Key. **Note**: do not use the API Key itself as the **keyid** in the URL — use the **id** of the key. Keep the API Key string secret — it grants access to your account!
+
++ Response 200 (application/json)
+
+        {
+          "permissions": {
+            "dns": {
+              "zones_allow_by_default": true,
+              "view_zones": true,
+              "zones_deny": [],
+              "manage_zones": true,
+              "zones_allow": []
+            },
+            "data": {
+              "push_to_datafeeds": true,
+              "manage_datasources": true,
+              "manage_datafeeds": true
+            },
+            "account": {
+              "manage_payment_methods": true,
+              "manage_plan": true,
+              "manage_teams": true,
+              "manage_apikeys": true,
+              "manage_account_settings": true,
+              "view_activity_log": true,
+              "view_invoices": true,
+              "manage_users": true
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "teams": ["52276047830f787e2ff88d4c"],
+          "id": "520422919f782d37dffb588a",
+          "last_access": null,
+          "key": "rifGeRNMshCOKwlaYBcu",
+          "name": "API Example App",
+          "ip_whitelist_strict": false,
+          "ip_whitelist": []
+        }
+
+### Create a new API Key [PUT /account/apikeys]
+
+Creates a new API Key. You should explicitly restrict access rights for the API Key to include only what the application requires. If you add the API Key to one or more Teams, you may not directly set its permissions and the API Key will inherit access rights from its Teams. The new API Key string is returned in the **key** field in the response — keep it secret, keep it safe. If it is compromised, delete the API Key immediately. You can restrict access to this key by adding IP addresses or CIDR blocks in the **ip_whitelist** array property. i.e. **ip_whitelist: ['104.20.48.182', '104.20.49.0/24']**.
+
++ Request
+
+        {
+          "permissions": {
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datafeeds": false,
+              "manage_datasources": false
+            },
+            "account": {
+              "view_invoices": false,
+              "view_activity_log": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_users": false,
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_account_settings": false
+            },
+            "dns": {
+              "zones_allow": [
+                "example.com"
+              ],
+              "zones_allow_by_default": false,
+              "manage_zones": false,
+              "view_zones": true
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "teams": [],
+          "name": "My Application"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "permissions": {
+            "dns": {
+              "zones_allow_by_default": false,
+              "view_zones": true,
+              "manage_zones": false,
+              "zones_allow": [
+                "example.com"
+              ]
+            },
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datasources": false,
+              "manage_datafeeds": false
+            },
+            "account": {
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_account_settings": false,
+              "view_activity_log": false,
+              "view_invoices": false,
+              "manage_users": false
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "teams": [],
+          "id": "520845159f782d5b1a10a86a",
+          "last_access": null,
+          "key": "MoEN3FJdcGelNSHHvKeO",
+          "name": "My Application",
+          "ip_whitelist_strict": false,
+          "ip_whitelist": []
+        }
+
+### Modify details of an API Key [POST]
+Change name or access rights for an API Key.
+You can restrict access to this user by adding IP addresses or CIDR blocks in the **ip_whitelist** array property. i.e. **ip_whitelist: ['104.20.48.182', '104.20.49.0/24']**.
+
++ Request
+        
+        {
+          "name": "Another application"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "permissions": {
+            "dns": {
+              "zones_allow_by_default": false,
+              "view_zones": true,
+              "manage_zones": false,
+              "zones_allow": [
+                "example.com"
+              ]
+            },
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datasources": false,
+              "manage_datafeeds": false
+            },
+            "account": {
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_account_settings": false,
+              "view_activity_log": false,
+              "view_invoices": false,
+              "manage_users": false
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "teams": [],
+          "id": "520845159f782d5b1a10a86a",
+          "last_access": null,
+          "key": "MoEN3FJdcGelNSHHvKeO",
+          "name": "Another application",
+          "ip_whitelist_strict": false,
+          "ip_whitelist": []
+        }
+
+### Delete an API Key [DELETE]
+
+Deletes an API Key. Any applications, scripts, or tools you have that are using this API Key will no longer be able to access your account. There is no response other than the HTTP status code.
+
++ Response 200
+
+## Team [/account/teams/{teamid}]
+
++ Parameter
+    + teamid (string)
+
+### Get all Teams [GET /account/teams]
+
+Returns a list of all Teams under the account, including access rights (**permissions**) associated with Users and API Keys in the team.
+
++ Response 200 (application/json)
+
+        [
+          {
+            "permissions": {
+              "dns": {
+                "zones_allow_by_default": true,
+                "view_zones": true,
+                "zones_deny": [],
+                "manage_zones": true,
+                "zones_allow": []
+              },
+              "data": {
+                "push_to_datafeeds": true,
+                "manage_datasources": true,
+                "manage_datafeeds": true
+              },
+              "account": {
+                "manage_payment_methods": true,
+                "manage_plan": true,
+                "manage_teams": true,
+                "manage_apikeys": true,
+                "manage_account_settings": true,
+                "view_activity_log": true,
+                "view_invoices": true,
+                "manage_users": true
+              },
+              "monitoring": {
+                "manage_lists": false,
+                "manage_jobs": false,
+                "view_jobs": false
+              }
+            },
+            "id": "520422919f782d37dffb588a",
+            "name": "API Example Team",
+            "ip_whitelist": []
+          },
+          {
+            "permissions": {
+              "dns": {
+                "zones_allow_by_default": false,
+                "view_zones": true,
+                "manage_zones": false,
+                "zones_allow": [
+                  "example.com"
+                ]
+              },
+              "data": {
+                "push_to_datafeeds": false,
+                "manage_datasources": false,
+                "manage_datafeeds": false
+              },
+              "account": {
+                "manage_payment_methods": false,
+                "manage_plan": false,
+                "manage_teams": false,
+                "manage_apikeys": false,
+                "manage_account_settings": false,
+                "view_activity_log": false,
+                "view_invoices": false,
+                "manage_users": false
+              },
+              "monitoring": {
+                "manage_lists": false,
+                "manage_jobs": false,
+                "view_jobs": false
+              }
+            },
+            "id": "520845159f782d5b1a10a86a",
+            "name": "My Other Team",
+            "ip_whitelist": []
+          }
+        ]
+
+### Get a Team's details [GET]
+
+Returns details, including **permissions**, for a single Team.
+
++ Response 200 (application/json)
+
+        {
+          "permissions": {
+            "dns": {
+              "zones_allow_by_default": true,
+              "view_zones": true,
+              "zones_deny": [],
+              "manage_zones": true,
+              "zones_allow": []
+            },
+            "data": {
+              "push_to_datafeeds": true,
+              "manage_datasources": true,
+              "manage_datafeeds": true
+            },
+            "account": {
+              "manage_payment_methods": true,
+              "manage_plan": true,
+              "manage_teams": true,
+              "manage_apikeys": true,
+              "manage_account_settings": true,
+              "view_activity_log": true,
+              "view_invoices": true,
+              "manage_users": true
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "id": "520845159f782d5b1a10a86a",
+          "name": "API Example Team",
+          "ip_whitelist": []
+        }
+
+### Create a new Team [PUT /account/teams]
+
+Creates a new Team. You should explicitly restrict access rights for the Team to include only what team members will require. Once you have created a Team, you may add Users and API Keys to the team by adding the Team to the **team** field in the User and API Key objects.
+You can restrict access to this team by adding IP whitelist records in the **ip_whitelist** array property. Compared to users and apikeys, teams support names on whitelist records. i.e. **ip_whitelist: [ {'name': 'Home Whitelist', 'values': ['104.20.48.182'], {'name': 'Multi Whitelist', 'values': ['104.20.49.0/24', '104.20.50.1']} ]**.
+
++ Request
+
+        {
+          "permissions": {
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datafeeds": false,
+              "manage_datasources": false
+            },
+            "account": {
+              "view_invoices": false,
+              "view_activity_log": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_users": false,
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_account_settings": false
+            },
+            "dns": {
+              "zones_allow": [
+                "example.com"
+              ],
+              "zones_allow_by_default": false,
+              "manage_zones": false,
+              "view_zones": true
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "ip_whitelist": [],
+          "name": "My New Team"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "permissions": {
+            "dns": {
+              "zones_allow_by_default": false,
+              "view_zones": true,
+              "manage_zones": false,
+              "zones_allow": [
+                "example.com"
+              ]
+            },
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datasources": false,
+              "manage_datafeeds": false
+            },
+            "account": {
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_account_settings": false,
+              "view_activity_log": false,
+              "view_invoices": false,
+              "manage_users": false
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "id": "520845159f782d5b1a10a86a",
+          "name": "My New Team",
+          "ip_whitelist": []
+        }
+
+### Modify details of a Team [POST]
+
+Change name or access rights for a Team.
+You can restrict access to this team by adding IP whitelist records in the **ip_whitelist** array property. Compared to users and apikeys, teams support names on whitelist records. i.e. **ip_whitelist: [ {'name': 'Home Whitelist', 'values': ['104.20.48.182'], {'name': 'Multi Whitelist', 'values': ['104.20.49.0/24', '104.20.50.1']} ]**.
+
++ Request
+
+        {
+          "name": "New Team Name"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "permissions": {
+            "dns": {
+              "zones_allow_by_default": false,
+              "view_zones": true,
+              "manage_zones": false,
+              "zones_allow": [
+                "example.com"
+              ]
+            },
+            "data": {
+              "push_to_datafeeds": false,
+              "manage_datasources": false,
+              "manage_datafeeds": false
+            },
+            "account": {
+              "manage_payment_methods": false,
+              "manage_plan": false,
+              "manage_teams": false,
+              "manage_apikeys": false,
+              "manage_account_settings": false,
+              "view_activity_log": false,
+              "view_invoices": false,
+              "manage_users": false
+            },
+            "monitoring": {
+              "manage_lists": false,
+              "manage_jobs": false,
+              "view_jobs": false
+            }
+          },
+          "id": "520845159f782d5b1a10a86a",
+          "name": "New Team Name",
+          "ip_whitelist": []
+        }
+        
+### Delete a Team [DELETE]
+
+Deletes a Team. Any Users or API Keys that belong to the Team will be removed from the Team. If they belong to other Teams, they will take on the permissions from the remaining Teams. If they only belong to the Team being deleted, they will be explicitly given permissions equivalent to those of the Team. There is no response other than the HTTP status code.
+
++ Response 200
+
+## IP Whitelist [/account/whitelist/{id}]
+
++ Parameter
+    + id (string)
+    
+### Get all IP Whitelists [GET /account/whitelist]
+
+Returns all the (global) IP Whitelist records for the account.
+
++ Response 200 (application/json)
+
+        [
+          {
+            "id":  "7c65ca27-23f0-4c00-8906-ae24f9fe0ae5",
+            "name": "New York Office",
+            "values": ["192.0.2.0/24"]
+          },
+          {
+            "id":  "ead8e0fb-cd99-4ae2-8643-1c9ab9eca4bc",
+            "name": "San Francisco Office",
+            "values": ["198.51.100.0/24"]
+          },
+        ]
+
+        
+### Get an IP Whitelist Records details [GET]
+
+Get an specific IP Whitelist Record by its unique ID.
+
+
++ Response 200 (application/json)
+
+        {
+          "id":  "7c65ca27-23f0-4c00-8906-ae24f9fe0ae5",
+          "name": "New York Office",
+          "values": ["192.0.2.0/24"]
+        }
+
+### Create a new IP Whitelist Record [PUT /account/whitelist]
+
+Creates a new IP Whitelist Record.
+
++ Request
+
+        {
+          "name": "San Diego Office",
+          "values": ["203.0.113.1", "203.0.113.2"]
+        }
+
++ Response 200 (application/json)
+
+        {
+          "id":  "873de209-16ca-4bfb-b53a-e495525cc298",
+          "name": "San Diego Office",
+          "values": ["203.0.113.1", "203.0.113.2"]
+        }
+
+### Modify details of an IP Whitelist Record [POST]
+
+Updates the properties of an existing IP Whitelist Record.
+
++ Request
+
+        {
+          "name": "New IP Whitelist Record Name",
+          "values": ["203.0.113.1", "203.0.113.2"]
+        }
+        
++ Response 200 (application/json)
+
+        {
+          "id": "873de209-16ca-4bfb-b53a-e495525cc298",
+          "name": "New IP Whitelist Record Name",
+          "values": ["203.0.113.1", "203.0.113.2"]
+        }
+        
+### Delete an IP Whitelist Record [DELETE]
+
++ Response 200
+
+## Plan and Billing [/account/plan]
+
+### Get self service subscription plans [GET /account/plantypes]
+
+Returns details of all currently available self service subscription plans and associated pricing. Each subscription plan is uniquely identified by the plan **type** and **period**. **Note**: details are returned regardless of your current plan, but at this time only users on the **startup**, **starter**, **basic**, or **advanced** plan types may change their subscription automatically. Users currently on other plans should contact **support@ns1.com**.
+
++ Response 200 (application/json)
+
+        [
+          {
+            "overage_order": "ascending",
+            "overages": {
+              "static": {
+                "queries": "0.00",
+                "records": "15.00"
+              },
+              "intelligent": {
+                "queries": "0.00",
+                "records": "0.00"
+              },
+              "dynamic": {
+                "queries": "0.00",
+                "records": "0.00"
+              },
+              "query": {
+                "rate": "0.00"
+              }
+            },
+            "monthly_price": "0.00",
+            "discount": "0.00",
+            "discount_type": "percentage",
+            "included": {
+              "any": {
+                "queries": 5e+05,
+                "records": 50
+              },
+              "static": {
+                "queries": 0,
+                "records": 0
+              },
+              "intelligent": {
+                "queries": 0,
+                "records": 0
+              },
+              "dynamic": {
+                "queries": 0,
+                "records": 0
+              },
+              "record": {
+                "count": 50
+              },
+              "filter_chain": {
+                "count": 1
+              },
+              "query": {
+                "count": 5e+05
+              }
+            },
+            "recurring_cost": "0.00",
+            "access_charges": {
+              "static": "0.00",
+              "intelligent": "0.00",
+              "dynamic": "0.00"
+            },
+            "monitoring": {
+              "jobs": 1,
+              "frequency": 60,
+              "regions": 1
+            },
+            "soft_limits": {
+              "zones": "500",
+              "answers_per_record": "50",
+              "filters_per_record": "15"
+            },
+            "additional": {
+              "filter_chain": {
+                "rate": "125.00",
+                "bucket": 1
+              },
+              "query": {
+                "rate": "8.00",
+                "bucket": 1e+06
+              },
+              "monitoring": {
+                "rate": "12.00",
+                "bucket": 1
+              },
+              "record": {
+                "rate": "15.00",
+                "bucket": 100
+              }
+            },
+            "email_support": "0",
+            "type": "startup",
+            "period": "monthly"
+          },
+          {
+            "overage_order": "ascending",
+            "overages": {
+              "static": {
+                "queries": "0.00",
+                "records": "15.00"
+              },
+              "intelligent": {
+                "queries": "0.00",
+                "records": "0.00"
+              },
+              "dynamic": {
+                "queries": "0.00",
+                "records": "0.00"
+              },
+              "query": {
+                "rate": "0.00"
+              }
+            },
+            "monthly_price": "25.00",
+            "discount": "0.00",
+            "discount_type": "percentage",
+            "included": {
+              "any": {
+                "queries": 5e+06,
+                "records": 200
+              },
+              "static": {
+                "queries": 0,
+                "records": 0
+              },
+              "intelligent": {
+                "queries": 0,
+                "records": 0
+              },
+              "dynamic": {
+                "queries": 0,
+                "records": 0
+              },
+              "record": {
+                "count": 200
+              },
+              "filter_chain": {
+                "count": 1
+              },
+              "query": {
+                "count": 5e+06
+              }
+            },
+            "recurring_cost": "300.00",
+            "access_charges": {
+              "static": "0.00",
+              "intelligent": "0.00",
+              "dynamic": "0.00"
+            },
+            "monitoring": {
+              "jobs": "2",
+              "frequency": "60",
+              "regions": "3"
+            },
+            "soft_limits": {
+              "zones": "500",
+              "answers_per_record": "50",
+              "filters_per_record": "15"
+            },
+            "additional": {
+              "filter_chain": {
+                "rate": "100.00",
+                "bucket": 1
+              },
+              "query": {
+                "rate": "8.00",
+                "bucket": 1e+06
+              },
+              "monitoring": {
+                "rate": "10.00",
+                "bucket": 1
+              },
+              "record": {
+                "rate": "15.00",
+                "bucket": 100
+              }
+            },
+            "email_support": "0",
+            "type": "basic",
+            "period": "annual"
+          },
+          ...
+        ]
+
+### Get current subscription plan details [GET /account/plan]
+
+Returns details of the current subscription for the account, including all applicable fees, charges, discounts, etc. The current balance, if any, is also returned.
+
++ Response 200 (application/json)
+
+        {
+          "type": "pro",
+          "period": "annual"
+          "monthly_price": "500.00",
+          "discount": "0.00",
+          "discount_type": "percentage",
+          "recurring_cost": "6000.00",
+          "locked": false,
+          "included": {
+            "any": {
+              "queries": 1e+08,
+              "records": 1000
+            },
+            "static": {
+              "queries": 0,
+              "records": 0
+            },
+            "intelligent": {
+              "queries": 0,
+              "records": 0
+            },
+            "dynamic": {
+              "queries": 0,
+              "records": 0
+            },
+            "record": {
+              "count": 1000
+            },
+            "filter_chain": {
+              "count": 2
+            },
+            "query": {
+              "count": 1e+08
+            }
+          },
+          "overage_order": "ascending",
+          "overages": {
+            "query": {
+              "rate": "0.00"
+            },
+            "static": {
+              "queries": "0.00",
+              "records": "0.00"
+            },
+            "intelligent": {
+              "queries": "0.00",
+              "records": "0.00"
+            },
+            "dynamic": {
+              "queries": "0.00",
+              "records": "0.00"
+            }
+          },
+          "access_charges": {
+            "static": "0.00",
+            "intelligent": "0.00",
+            "dynamic": "0.00"
+          },
+          "monitoring": {
+            "jobs": 10,
+            "frequency": 30,
+            "regions": 5
+          },
+          "soft_limits": {
+            "zones": "500",
+            "answers_per_record": "50",
+            "filters_per_record": "15"
+          },
+          "additional": {
+            "filter_chain": {
+              "rate": "75.00"
+              "bucket": 1
+            },
+            "query": {
+              "rate": "1.25"
+              "bucket": 1e+06
+            },
+            "monitoring": {
+              "rate": "6.00"
+              "bucket": 1
+            },
+            "record": {
+              "rate": "10.00"
+              "bucket": 100
+            }
+          },
+          "upgrades": {},
+          "upgrade_price_by_period": "0.00",
+          "monthly_upgrade_price": "0.00",
+          "email_support": "0",
+          "balance": "0.00"
+        }
+
+
+### Change your subscription plan [POST /account/plan]
+
+If you are on the **startup**, **starter**, **basic**, or **advanced** plan, and you have a valid credit card on file, you may call this method to instantly pay for and upgrade to a new subscription plan or billing period. You may change to a **starter**, **basic** or **advanced** plan, or a **monthly** or **annual** term. **Note**: In this case, **you will be charged the full price of the new plan as indicated in the recurring_cost field in the plan description**. If you are currently on any other plan, you do not have a payment method on file, or you are requesting a change to the **professional**, **enterprise**, **enterprise premium** plan, calling this method will submit a request to change your subscription plan, which we will review and respond to. In that case, you may also pass us **notes** about your request. If we submit a change request but cannot process it immediately, the response will not include a body.
+
++ Request
+
+        {
+          "type": "advanced",
+          "period": "annual"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "overage_order": "ascending",
+          "type": "basic",
+          "balance": 25.00,
+          "discount_type": "percentage",
+          "monthly_price": "25.00",
+          "access_charges": {
+            "static": "0.00",
+            "intelligent": "0.00",
+            "dynamic": "0.00"
+          },
+          "period": "monthly",
+          "discount": "0.00",
+          "included": {
+            "any": {
+              "queries": 5e+06,
+              "records": 200
+            },
+            "static": {
+              "queries": 0,
+              "records": 0
+            },
+            "intelligent": {
+              "queries": 0,
+              "records": 0
+            },
+            "dynamic": {
+              "queries": 0,
+              "records": 0
+            },
+            "record": {
+              "count": 200,
+            },
+            "filter_chain": {
+              "count": 1,
+            },
+            "query": {
+              "count": 5e+06,
+            },
+          },
+          "recurring_cost": "25.00",
+          "overages": {
+            "query": {
+              "rate": "8"
+            },
+            "static": {
+              "queries": "8",
+              "records": "15.00"
+            },
+            "intelligent": {
+              "queries": "8",
+              "records": "0.00"
+            },
+            "dynamic": {
+              "queries": "8",
+              "records": "0.00"
+            }
+          },
+          "email_support": "0",
+          "monitoring": {
+            "jobs": "2",
+            "frequency": "60",
+            "regions": "3"
+          },
+          "additional": {
+            "filter_chain": {
+              "rate": "100.00",
+              "bucket": 1
+            },
+            "query": {
+              "rate": "8.00",
+              "bucket": 1e+06
+            },
+            "monitoring": {
+              "rate": "10.00",
+              "bucket": 1
+            },
+            "record": {
+              "rate": "15.00",
+              "bucket": 100
+            }
+          },
+          "locked": false
+        }
+
+### List invoices [GET /account/invoices]
+
+Lists basic details of all historical and current invoices for the account.
+
++ Response 200 (application/json)
+
+        [
+          {
+            "due": 1377129600,
+            "sent": 1375756229,
+            "id": 11,
+            "amount": "82.02",
+            "status": "due"
+          },
+          {
+            "due": 1375315200,
+            "sent": 1373985364,
+            "id": 10,
+            "amount": "29.00",
+            "status": "paid"
+          },
+          {
+            "due": 1366588800,
+            "sent": 1365215402,
+            "id": 2,
+            "amount": "0.00",
+            "status": "paid"
+          },
+          {
+            "due": 1369180800,
+            "sent": 1367807401,
+            "id": 4,
+            "amount": "0.00",
+            "status": "paid"
+          }
+        ]
+
+### Download an invoice [GET /account/invoices/{invoiceid}{?authtoken}]
+
+The invoice is returned in PDF format. This method will directly return a PDF. The **Content-Type** and **Content-Disposition** headers will be set accordingly. However, if there is an error, the usual JSON error will be returned.
+
+There are certain cases, such as in some browsers, where you will be unable to send the **X-NSONE-Key** authentication header to download a file intended to be saved to the user's filesystem, due to restrictions on some kinds of AJAX/XHR requests. In this case, you may use an alternative authentication mechanism for this method: add an **authtoken** parameter to the URL, consisting of a SHA1 hash of the concatenation of the API Key, the invoice id, and the **sent** field from **/account/invoices** for the invoice (as a string). For example: **sha1('qACMD09OJXBxT7XOuRs8101373985364')**.
+
++ Parameter
+    + invoiceid: `727` (string)
+    + authtoken: `d4a2080c926b85c9936908852454cb181249622a` (string, optional)
+    
++ Response 200
+
+### Get bill at a glance [GET /account/billataglance]
+
+Returns usage and charges that will appear on the next invoice.
+
++ Response 200 (application/json)
+
+        {
+          "plan": "starter",
+          "period": "monthly",
+          "last_invoice": 1377561600,
+          "next_invoice": 1379721600,
+          "next_base_invoice": 1379721600,
+          "recurring_cost": "0.00"
+          "recurring_cost_next_invoice": "0.00",
+          "any": {
+            "overage_order": "ascending",
+            "query_credit": 5e+05,
+            "record_credit": 50
+          },
+          "static": {
+            "record_rate": "15.00",
+            "access_charge": "0.00",
+            "records": 14,
+            "query_credit": 0,
+            "query_cost": "0.00",
+            "query_rate_per_million": "8",
+            "queries": 5,
+            "record_credit": 0,
+            "record_cost": "0.00"
+          },
+          "dynamic": {
+            "record_rate": "1",
+            "access_charge": "0.00",
+            "records": 2,
+            "query_credit": 0,
+            "query_cost": "0.00",
+            "query_rate_per_million": "8",
+            "queries": 10,
+            "record_credit": 0,
+            "record_cost": "0.00"
+          },
+          "intelligent": {
+            "record_rate": "1",
+            "access_charge": "0.00",
+            "records": 0,
+            "query_credit": 0,
+            "query_cost": "0.00",
+            "query_rate_per_million": "6",
+            "queries": 0,
+            "record_credit": 0,
+            "record_cost": "0.00"
+          },
+          "totals": {
+            "record_cost": "0.00",
+            "record_credit": 16,
+            "queries": 15,
+            "query_credit": 15,
+            "records": 16,
+            "access_charge": "0.00",
+            "query_cost": "0.00"
+          },
+          "balance": "0.00",
+          "bill": "0.00"
+        }
+
+## Payment method [/account/paymentmethods/{id}]
+
++ Parameter
+    + id (string) - payment method id
+
+### Get list of active payment methods [GET /account/paymentmethods]
+
+This method returns the list of all payment methods (credit cards) attached to the account.
+
++ Response 200 (application/json)
+
+        [
+          {
+            "type": "creditcard",
+            "default": true,
+            "cc_expire_year": 2014,
+            "cc_expire_month": 3,
+            "firstname": "John",
+            "lastname": "Smith",
+            "company": "Joe Company",
+            "cc_type": "mastercard",
+            "phone": "222-555-5555",
+            "address": {
+              "country": "US",
+              "street": "20 Awesome Street Suite 1234",
+              "state": "NY",
+              "city": "New York",
+              "postalcode": "10005"
+            },
+            "cc_number_last4": "4444",
+            "id": 8273
+          },
+          {
+            "type": "creditcard",
+            "cc_expire_year": 2016,
+            "cc_expire_month": 4,
+            "firstname": "Bob",
+            "lastname": "Boberton",
+            "company": "Joe Company",
+            "cc_type": "amex",
+            "phone": "212-867-5309",
+            "address": {
+              "country": "US",
+              "street": "20 Awesome Street Suite 1234",
+              "state": "NY",
+              "city": "New York",
+              "postalcode": "10005"
+            },
+            "cc_number_last4": "1000",
+            "id": 6159
+          }
+        ]
+
+### Get a payment method's details [GET]
+
+This method returns just the details for a single payment method given its **id**.
+
++ Response 200 (application/json)
+
+        {
+          "type": "creditcard",
+          "default": true,
+          "cc_expire_year": 2014,
+          "cc_expire_month": 3,
+          "firstname": "John",
+          "lastname": "Smith",
+          "company": "Joe Company",
+          "cc_type": "mastercard",
+          "phone": "222-555-5555",
+          "address": {
+            "country": "US",
+            "street": "20 Awesome Street Suite 1234",
+            "state": "NY",
+            "city": "New York",
+            "postalcode": "10005"
+          },
+          "cc_number_last4": "4444",
+          "id": 8273
+        }
+
+### Add a new payment method [PUT /account/paymentmethods]
+
+Adds a new credit card to the account. If you set **default** to **true** it will become the new default card we charge for new invoices. We will do a small pre-authorization charge to the credit card, which will be refunded.
+
++ Request
+
+        {
+          "address": {
+            "country": "US",
+            "postalcode": "10005",
+            "state": "NY",
+            "city": "New York",
+            "street": "20 Awesome Street Suite 1234"
+          },
+          "phone": "222-555-5555",
+          "company": "Joe Company",
+          "type": "creditcard",
+          "default": true,
+          "cc_number": "5215888899994444",
+          "cc_expire_year": 2014,
+          "cc_expire_month": 3,
+          "cc_cvv2": "1234",
+          "firstname": "John",
+          "lastname": "Smith"
+        }
+
++ Response 200 (application/json)
+
+        {
+          "type": "creditcard",
+          "default": true,
+          "cc_expire_year": 2014,
+          "cc_expire_month": 3,
+          "firstname": "John",
+          "lastname": "Smith",
+          "company": "Joe Company",
+          "cc_type": "mastercard",
+          "phone": "222-555-5555",
+          "address": {
+            "country": "US",
+            "street": "20 Awesome Street Suite 1234",
+            "state": "NY",
+            "city": "New York",
+            "postalcode": "10005"
+          },
+          "cc_number_last4": "4444",
+          "id": 8273
+        }
+
+### Make a payment method the default [POST]
+
+Calling this method — with no request body — sets the requested payment method as the default one, and it will be charged for future invoices. You may not modify other details associated with an existing payment method — add a new one instead. There is no response other than the HTTP status code.
+
++ Response 200
+
+### Delete a payment method [DELETE]
+
+Deletes a credit card. You may not delete the last credit card from the account — add another one first. There is no response other than the HTTP status code.
+
++ Response 200
+
+## Activity log [/account/activity]
+
+### Get account activity log [GET /account/activity{?limit,start,end,resource_type,user,resource_id}]
+
+Returns entries from the account activity log. By default, the most recent 20 entries are returned — get more by setting **limit**. You can also restrict the results to entries later than some **start** (Unix timestamp) or earlier than some **end**. If you specify a **resource_type**, only entries for resources of that type are returned. You may also restrict by **user** and **resource_id**. Activity log entries include a **user_type** which is one of "user", "apikey", or "system" depending on where the activity came from, and for "user" and "apikey" activity, the **user_id** is the username or API Key id, respectively. For "create" and "update" actions, any **resource** details are for the resource after the action is taken; for "delete" actions, any such details show the resource as it was prior to deletion.
+
++ Parameters
+    + limit (number, optional) - Maximum number of results
+    + start (number, optional) - Absolute start time in UNIX timestamp.
+    + end (number, optional) - Absolute end time in UNIX timestamp (defaults to current time).
+    + resource_type (string, optional) 
+    + user (string, optional)
+    + resource_id (string, optional)
+    
++ Response 200 (application/json)
+
+        [
+          {
+            "resource_type": "zonefile",
+            "user_id": "myuser",
+            "resource_id": "52276047830f787e2ff88d4c",
+            "timestamp": 1378312263,
+            "user_type": "user",
+            "action": "create",
+            "resource": {
+              "id": "52276047830f787e2ff88d4c",
+              "hostmaster": "hostmaster@nsone.net",
+              "meta": {},
+              "nx_ttl": 60,
+              "retry": 3600,
+              "zone": "myzone.net",
+              "warnings": [],
+              "refresh": 21600,
+              "expiry": 1209600,
+              "records": [
+                {
+                  "id": "52276047830f787e2ff88d4f",
+                  "type": "NS",
+                  "tier": 1,
+                  "short_answers": [
+                    "dns1.p03.nsone.net",
+                    "dns2.p03.nsone.net",
+                    "dns3.p03.nsone.net",
+                    "dns4.p03.nsone.net"
+                  ],
+                  "domain": "myzone.net"
+                },
+                {
+                  "id": "52276047830f787e2ff88d53",
+                  "type": "A",
+                  "tier": 1,
+                  "short_answers": [
+                    "1.1.1.1",
+                    "2.2.2.2"
+                  ],
+                  "domain": "*.myzone.net"
+                }
+              ],
+              "dns_servers": [
+                "dns1.p03.nsone.net",
+                "dns2.p03.nsone.net",
+                "dns3.p03.nsone.net",
+                "dns4.p03.nsone.net"
+              ],
+              "networks": [0],
+              "network_pools": ["p03"]
+            },
+            "user_name": "My User",
+            "id": "52276047830f787e2ff88d59"
+          },
+          {
+            "resource_type": "user",
+            "user_id": "myuser",
+            "resource_id": "olduser",
+            "timestamp": 1378312122,
+            "user_type": "user",
+            "action": "delete",
+            "resource": {
+              "permissions": {
+                "dns": {
+                  "zones_allow_by_default": true,
+                  "view_zones": true,
+                  "zones_deny": [],
+                  "manage_zones": true,
+                  "zones_allow": []
+                },
+                "data": {
+                  "manage_datafeeds": true,
+                  "manage_datasources": true,
+                  "push_to_datafeeds": true
+                },
+                "account": {
+                  "manage_payment_methods": true,
+                  "manage_teams": true,
+                  "manage_apikeys": true,
+                  "manage_account_settings": true,
+                  "view_activity_log": true,
+                  "view_invoices": true,
+                  "manage_users": true,
+                  "manage_plan": true
+                },
+                "monitoring": {
+                  "manage_lists": false,
+                  "manage_jobs": false,
+                  "view_jobs": false
+                }
+              },
+              "email": "olduser@example.com",
+              "last_access": null,
+              "notify": {
+                "billing": true
+              },
+              "name": "Old User",
+              "username": "olduser"
+            },
+            "user_name": "My User",
+            "id": "52275fba830f787e2ff88d42"
+          },
+          ...
+        ]
+
+# Group Statistics
+
+## QPS [/stats/qps/{zone}]
+
++ Parameter
+    + zone (string)
+
+### Account-wide DNS queries/second [GET /stats/qps]
+
+Returns current queries per second (QPS) for the account. The QPS number is lagged by approximately 30 seconds for statistics collection; and the rate is computed over the preceding minute.
+
++ Response 200 (application/json)
+
+        {
+          "qps": 8.2
+        }
+        
+### Queries/sec in a zone [GET]
+
+Returns current queries per second (QPS) for a specific zone. The QPS number is lagged by approximately 30 seconds for statistics collection; and the rate is computed over the preceding minute.
+
++ Response 200 (application/json)
+
+        {
+          "qps": 6.7
+        }
+        
+### Queries/sec for a record [GET /stats/qps/{zone}/{domain}/{type}]
+
+Returns current queries per second (QPS) for a specific record. The QPS number is lagged by approximately 30 seconds for statistics collection; and the rate is computed over the preceding minute.
+
+
++ Response 200 (application/json)
+
+        {
+          "qps": 2.3
+        }
+
+## Usage [/stats/usage]
+
+### Account-wide usage statistics [GET /stats/usage{?period,expand,aggregate,by_tier}]
+
+Returns statistics and graphs for the entire account over a given period. Stats are returned as a list of stats "objects" containing various stats fields that correspond to the given entity. If **domain**, **rectype** and **zone** fields are present in the object, the stats are for the given record; if only the **zone** field is present, the stats are aggregate stats for the zone; and if none of the fields is present, the stats are aggregate stats for the entire account.
+
+You may specify the following query parameters:
+
+- **period**: one of **1h**, **24h**, or **30d**; default **24h**.
+- **expand**: **true** or **false**; default **false** — if set, breaks down stats by zone, and if unset, shows aggregate stats for the entire account.
+- **aggregate**: **true** or **false**; default **true** — if set, returns aggregated stats across all zones and billing tiers (even if **expand** and **by_tier** are **true**).
+- **by_tier**: **true** or **false**; default **false** — if set, returns stats and graphs for each billing tier (in **records_by_tier** and **queries_by_tier** in each stats object). The first element corresponds to `STATIC` records/queries; the second to `DYNAMIC` ones; and the third to `INTELLIGENT` ones.
+
++ Parameters
+    + period: `24h` (enum(string), optional) - Relative time.
+        + Members
+            + `1h`
+            + `24h`
+            + `30d`
+        + Default: `24h`
+    + expand: `false` (boolean, optional) - If set, breaks down stats by zone, and if unset, shows aggregate stats for the entire account.
+        + Default: `false`
+    + aggregate: `true` (boolean, optional) - If set, returns aggregated stats across all zones and billing tiers (even if expand and by_tier are true).
+        + Default: `true`
+    + by_tier: `false` (boolean, optional)
+        If set, returns stats and graphs for each billing tier (in **records_by_tier** and **queries_by_tier** in each stats object). The first element corresponds to STATIC records/queries; the second to DYNAMIC ones; and the third to INTELLIGENT ones.
+        + Default: `false`
+
++ Response 200 (application/json)
+
+        [
+          {
+            "period": "24h",
+            "zone": "example.com",
+            "records": 3,
+            "records_by_tier": [
+              3,
+              0,
+              0
+            ],
+            "queries": 1756,
+            "queries_by_tier": [
+              1756,
+              0,
+              0
+            ],
+            "graph": [
+              [
+                1376236061,
+                33
+              ],
+              [
+                1376237808,
+                60
+              ],
+              ...
+            ],
+            "graph_by_tier": [
+              [
+                [
+                  1376236061,
+                  33
+                ],
+                [
+                  1376237808,
+                  60
+                ],
+                ...
+              ],
+              [],
+              []
+            ]
+          },
+          ...
+        ]
+
+### Usage in a zone [GET /stats/usage/{zone}{?period,expand,aggregate,by_tier}]
+
+See **/stats/usage** for a detailed explanation of the output and query parameters. If **expand=true**, stats will be returned for all records in the zone.
+
++ Parameters
+    + zone (string) - The zone name
+    + period: `24h` (enum(string), optional) - Relative time.
+        + Members
+            + `1h`
+            + `24h`
+            + `30d`
+        + Default: `24h`
+    + expand: `false` (boolean, optional) - If set, breaks down stats by zone, and if unset, shows aggregate stats for the entire account.
+        + Default: `false`
+    + aggregate: `true` (boolean, optional) - If set, returns aggregated stats across all zones and billing tiers (even if expand and by_tier are true).
+        + Default: `true`
+    + by_tier: `false` (boolean, optional)
+        If set, returns stats and graphs for each billing tier (in **records_by_tier** and **queries_by_tier** in each stats object). The first element corresponds to STATIC records/queries; the second to DYNAMIC ones; and the third to INTELLIGENT ones.
+        + Default: `false`
+        
++ Response 200 (application/json)
+
+        [
+          {
+            "period": "24h",
+            "zone": "example.com",
+            "domain": "example.com",
+            "rectype": "NS",
+            "queries": 1,
+            "graph": [
+              [
+                1376237335,
+                0
+              ],
+              [
+                1376239368,
+                0
+              ],
+              ...
+            ]
+          },
+          {
+            "period": "24h",
+            "zone": "example.com",
+            "domain": "example.com",
+            "rectype": "NXDOMAIN",
+            "queries": 1,
+            "graph": [
+              [
+                1376237335,
+                0
+              ],
+              [
+                1376239184,
+                0
+              ],
+              ...
+            ]
+          },
+          ...
+        ]
+
+### Usage for a record [GET /stats/usage/{zone}/{domain}/{type}{?period}]
+
+See **/stats/usage** for a detailed explanation of the output and query parameters. The **expand**, **by_tier**, and **aggregate** flags are ignored for record usage.
+
++ Parameters
+    + zone (string) - The zone name
+    + domain (string) - The domain name
+    + type (string) - The record type
+    + period: `24h` (enum(string), optional) - Relative time.
+        + Members
+            + `1h`
+            + `24h`
+            + `30d`
+        + Default: `24h`
+        
++ Response 200 (application/json)
+
+        [
+          {
+            "queries": 4,
+            "zone": "example.com",
+            "domain": "www.example.com"
+            "rectype": "A",
+            "period": "24h",
+            "graph": [
+              [
+                1376279703,
+                0
+              ],
+              [
+                1376281516,
+                0
+              ],
+              ...
+            ]
+          }
+        ]
+
+
+# Group Pulsar
+
+## App [/pulsar/apps/{appID}]
+
+A Pulsar __App__ is a container of pulsar jobs, permissions and config defaults.
+
+### Get list of pulsar apps [GET /pulsar/apps]
+
+Returns all pulsar apps in your account.
+
++ Attribute (array[PulsarAppType])
+
++ Response 200 (application/json)
+
+    + Headers
+
+            X-RateLimit-Limit: 300
+            X-RateLimit-Period: 300
+            X-RateLimit-By: 300
+            X-RateLimit-Remaining: 300
 
     + Body
 
-            {
-                "question": "Favourite programming language?",
-                "published_at": "2015-08-05T08:40:51.620Z",
-                "choices": [
-                    {
-                        "choice": "Swift",
-                        "votes": 0
-                    }, {
-                        "choice": "Python",
-                        "votes": 0
-                    }, {
-                        "choice": "Objective-C",
-                        "votes": 0
-                    }, {
-                        "choice": "Ruby",
-                        "votes": 0
+            [
+                {
+                    "name":"Pulsar",
+                    "tags":["demo"],
+                    "community":true,
+                    "id":"583256275e269da036c98e9a",
+                    "token":4375934083,
+                    "default_firehoses":null,
+                    "appid":"130nwg",
+                    "active":true,
+                    "jobs_per_transaction":3,
+                    "networks":[0]
+                },
+                {
+                    "name":"Pulsar community",
+                    "community":true,
+                    "id":"583256445e269da036c98e9b",
+                    "default_firehoses":[
+                        {
+                            "typeid":"aggregate_metric",
+                            "datapoint_ttl":300,
+                            "store_history":true,
+                            "window":1800.0,
+                            "flush_percent":0.1,
+                            "active":true,
+                            "id":"5832564f5e269da036c98e9c"
+                        }
+                    ],
+                    "appid":"1xy4sn3",
+                    "active":true,
+                    "networks":[0],
+                    "default_config": {
+                        "priority":1.0,
+                        "http":true,
+                        "request_timeout_millis":1400,
+                        "https":false,
+                        "max_rps":100.0
                     }
-                ]
+                }
+            ]
+
+
+### Get an app's details [GET]
+
+Returns a single Pulsar app
+
++ Parameters
+    + appID (string) - ID of the Pulsar App
+
++ Attributes (PulsarAppType)
+
++ Response 200 (application/json)
+
+    + Headers
+
+            X-RateLimit-Limit: 300
+            X-RateLimit-Period: 300
+            X-RateLimit-By: 300
+            X-RateLimit-Remaining: 300
+    
+    + Body
+
+            {
+                "name":"Pulsar",
+                "tags":["demo"],
+                "community":true,
+                "id":"583256635e269da036c98e9d",
+                "token":43539504,
+                "token":58947503,
+                "appid":"435jf",
+                "active":true,
+                "jobs_per_transaction":3,
+                "networks":[0]
             }
+
+
+## Job [/pulsar/apps/{appID}/jobs/{jobID}]
+
+### List all Jobs for an App [GET /pulsar/apps/{appID}/jobs]
+
+Get pulsar jobs in an app.
+
++ Parameters
+    + appID (string) - ID of the Pulsar App
+
++ Attributes (PulsarJobType)
+
++ Response 200 (application/json)
+
+        [  
+            {  
+                "typeid":"latency",
+                "firehoses":[],
+                "name":"CDN Latency - A",
+                "id":"583254e05e269da036c98e87",
+                "community":true,
+                "jobid":"43qf34f",
+                "appid":"43f23d6",
+                "active":true,
+                "shared":true,
+                "config":{  
+                    "host":"43qf34f.m.ns1p.net",
+                    "url_path":"/l.gif",
+                    "http":true,
+                    "granularities":[  
+                        "geo",
+                        "geo_asn"
+                    ]
+                },
+                "networks":[  
+                    0
+                ]
+            },
+            {  
+                "typeid":"latency",
+                "firehoses":[],
+                "name":"CDN Latency - B",
+                "id":"583254ff5e269da036c98e88",
+                "community":true,
+                "jobid":"7g5g9gh",
+                "appid":"reag401",
+                "active":true,
+                "shared":true,
+                "config":{  
+                    "host":"7g5g9gh.m.ns1p.net",
+                    "url_path":"/l.gif",
+                    "http":true,
+                    "granularities":[  
+                        "geo",
+                        "geo_asn"
+                    ]
+                },
+                "networks":[  
+                    0
+                ]
+            },
+            {  
+                "typeid":"latency",
+                "firehoses":[],
+                "name":"CDN Latency - C",
+                "id":"5832550d5e269da036c98e89",
+                "community":true,
+                "jobid":"1xtvhvx",
+                "appid":"1xy4sn3",
+                "active":true,
+                "shared":true,
+                "config":{  
+                    "http":false,
+                    "priority":0.5,
+                    "host":"cname.example.com",
+                    "https":true,
+                    "url_path":"/static/images/white_pixel.gif",
+                    "granularities":[  
+                        "geo",
+                        "geo_asn"
+                    ],
+                    "request_timeout_millis":2000
+                },
+                "networks":[  
+                    0    
+                ]
+              },
+              {  
+                 "typeid":"recursor",
+                 "firehoses":[  
+        
+                 ],
+                 "name":"Community Resolver Modeling",
+                 "id":"583255405e269da036c98e8a",
+                 "community":true,
+                 "jobid":"tg9g3rg",
+                 "appid":"nv2qfl0",
+                 "active":true,
+                 "shared":false,
+                 "config":null,
+                 "networks":[  
+                    0
+                 ]
+              },
+              {  
+                 "typeid":"latency",
+                 "firehoses":[  
+        
+                 ],
+                 "name":"D Latency - D LON1",
+                 "id":"583255565e269da036c98e8b",
+                 "community":true,
+                 "jobid":"94eecw8",
+                 "appid":"bol99d",
+                 "active":true,
+                 "shared":false,
+                 "config":{  
+                    "priority":0.2,
+                    "host":"94eecw8.m.ns1p.net",
+                    "url_path":"/a/l.gif",
+                    "request_timeout_millis":2000
+                 },
+                 "networks":[  
+                    0
+                 ]
+              },
+              {  
+                 "typeid":"latency",
+                 "firehoses":[  
+                    {  
+                       "active":true,
+                       "typeid":"sample_raw_data",
+                       "percent":0.1,
+                       "id":"583255675e269da036c98e8c"
+                    }
+                 ],
+                 "name":"D CDN - ams04",
+                 "id":"583255705e269da036c98e8d",
+                 "community":true,
+                 "jobid":"9rk321v",
+                 "appid":"oief67d",
+                 "active":true,
+                 "shared":true,
+                 "config":{  
+                    "host":"pcdn01.ams04.nsone.co",
+                    "url_path":"/a/l.gif",
+                    "granularities":[  
+                       "geo",
+                       "geo_asn"
+                    ],
+                    "https":false
+                 },
+                 "networks":[  
+                    0
+                 ]
+              },
+              {  
+                 "typeid":"latency",
+                 "firehoses":[  
+                    {  
+                       "active":true,
+                       "typeid":"sample_raw_data",
+                       "percent":0.1,
+                       "id":"583256ae5e269da036c98e9e"
+                    }
+                 ],
+                 "name":"D CDN - fra02",
+                 "id":"583256b75e269da036c98e9f",
+                 "community":true,
+                 "jobid":"43f34qf",
+                 "appid":"0r09gj8",
+                 "active":true,
+                 "shared":true,
+                 "config":{  
+                    "host":"pcdn01.fra02.nsone.co",
+                    "url_path":"/a/l.gif",
+                    "granularities":[  
+                       "geo",
+                       "geo_asn"
+                    ],
+                    "https":false
+                 },
+                 "networks":[  
+                    0
+                 ]
+              },
+              {  
+                 "typeid":"latency",
+                 "firehoses":[  
+                    {  
+                       "active":true,
+                       "typeid":"sample_raw_data",
+                       "percent":0.1,
+                       "id":"583255865e269da036c98e8f"
+                    }
+                 ],
+                 "name":"DO CDN - lga02",
+                 "id":"5832558e5e269da036c98e90",
+                 "community":true,
+                 "jobid":"196bsxf",
+                 "appid":"1xy4sn3",
+                 "active":true,
+                 "shared":true,
+                 "config":{  
+                    "host":"pcdn01.lga02.nsone.co",
+                    "url_path":"/a/l.gif",
+                    "granularities":[  
+                       "geo",
+                       "geo_asn"
+                    ],
+                    "https":false
+                 },
+                 "networks":[  
+                    0
+                 ]
+              },
+              {  
+                 "typeid":"latency",
+                 "firehoses":[  
+                    {  
+                       "active":true,
+                       "typeid":"sample_raw_data",
+                       "percent":0.1,
+                       "id":"583255995e269da036c98e91"
+                    }
+                 ],
+                 "name":"CDN - lhr02",
+                 "id":"583255a15e269da036c98e92",
+                 "community":true,
+                 "jobid":"1963dir",
+                 "appid":"1xy4sn3",
+                 "active":true,
+                 "shared":true,
+                 "config":{  
+                    "host":"pcdn01.lhr02.nsone.co",
+                    "url_path":"/a/l.gif",
+                    "granularities":[  
+                       "geo",
+                       "geo_asn"
+                    ],
+                    "https":false
+                 },
+                 "networks":[  
+                    0
+                 ]
+              },
+              {  
+                 "typeid":"latency",
+                 "firehoses":[  
+                    {  
+                       "active":true,
+                       "typeid":"sample_raw_data",
+                       "percent":0.1,
+                       "id":"583255af5e269da036c98e93"
+                    }
+                 ],
+                 "name":"CDN - sfo01",
+                 "id":"583255c85e269da036c98e94",
+                 "community":true,
+                 "jobid":"1968zsj",
+                 "appid":"1xy4sn3",
+                 "active":true,
+                 "shared":true,
+                 "config":{  
+                    "host":"pcdn01.sfo01.nsone.co",
+                    "url_path":"/a/l.gif",
+                    "granularities":[  
+                       "geo",
+                       "geo_asn"
+                    ],
+                    "https":false
+                 },
+                 "networks":[  
+                    0
+                 ]
+              },
+              {  
+                 "typeid":"latency",
+                 "firehoses":[  
+                    {  
+                       "active":true,
+                       "typeid":"sample_raw_data",
+                       "percent":0.1,
+                       "id":"583255d55e269da036c98e95"
+                    }
+                 ],
+                 "name":"CDN - sin04",
+                 "id":"583255dd5e269da036c98e96",
+                 "community":true,
+                 "jobid":"19666nn",
+                 "appid":"1xy4sn3",
+                 "active":true,
+                 "shared":true,
+                 "config":{  
+                    "host":"pcdn01.sin04.nsone.co",
+                    "url_path":"/a/l.gif",
+                    "granularities":[  
+                       "geo",
+                       "geo_asn"
+                    ],
+                    "https":false
+                 },
+                 "networks":[  
+                    0
+                 ]
+              },
+              {  
+                 "typeid":"latency",
+                 "firehoses":[  
+                    {  
+                       "active":true,
+                       "typeid":"sample_raw_data",
+                       "percent":0.1,
+                       "id":"583255e75e269da036c98e97"
+                    }
+                 ],
+                 "name":"CDN - yyz02",
+                 "id":"583255ee5e269da036c98e98",
+                 "community":true,
+                 "jobid":"1967l83",
+                 "appid":"1xy4sn3",
+                 "active":true,
+                 "shared":true,
+                 "config":{  
+                    "host":"pcdn01.yyz02.nsone.co",
+                    "url_path":"/a/l.gif",
+                    "granularities":[  
+                       "geo",
+                       "geo_asn"
+                    ],
+                    "https":false
+                 },
+                 "networks":[  
+                    0
+                 ]
+              },
+              {  
+                 "typeid":"latency",
+                 "firehoses":[  
+        
+                 ],
+                 "name":"test.e.ns1p.net",
+                 "id":"583255f85e269da036c98e99",
+                 "community":true,
+                 "jobid":"as3dc8",
+                 "appid":"1xy4sn3",
+                 "active":false,
+                 "shared":false,
+                 "config":{  
+                    "host":"test.e.ns1p.net",
+                    "url_path":"/a/l.gif"
+                 },
+                 "networks":[  
+                    0
+                 ]
+              }
+           ]
+
+### Get a job's details [GET]
+
++ Parameters
+    + appID (string) - ID of the Pulsar App
+    + jobID (string) - ID of the Pulsar Job
+
++ Attributes (PulsarJobType)
+
++ Response 200 (application/json)
+
+        {
+            "typeid":"latency",
+            "firehoses":[],
+            "name":"CDN Latency - A",
+            "id":"583254e05e269da036c98e87",
+            "community":true,
+            "jobid":"43qf34f",
+            "appid":"43f23d6",
+            "active":true,
+            "shared":true,
+            "config":{  
+                "host":"43qf34f.m.ns1p.net",
+                "url_path":"/l.gif",
+                "http":true,
+                "granularities":[  
+                    "geo",
+                    "geo_asn"
+                ]
+            },
+            "networks":[  
+                0
+            ]
+        }
+
+
+## Live Job Data [/pulsar/apps/{appID}/jobs/{jobID}/live]
+
+View live, aggregated Pulsar GEO data for a job. Responses are returned where each 
+top-level key is a geo (or geo:region) code. 
+
+_At present, only geo granularity data is available, GEO and ASN will be added in the future._
+
++ Parameters
+    + appID (string) - ID of the Pulsar App
+    + jobID (string) - ID of the Pulsar Job
+    
+### Get Live Aggregated Data [GET]
+
++ Attributes (PulsarLiveJobDataType)
+
++ Response 200 (application/json)
+
+        {
+            "DE": {
+                "age": 99.7,
+                "value": 47.977
+            },
+            "JP": {
+                "age": 355.3,
+                "value": 310.213
+            },
+            "US": {
+                "age": 1,
+                "value": 53.241
+            }
+        }
+
+## Custom Job Data [/pulsar/apps/{appID}/jobs/{jobID}/data{?start,end,period,geo,asn,agg}]
+
+Query for historical and "live" data.
+
++ Parameters
+    + appID (string) - ID of the Pulsar App
+    + jobID (string) - ID of the Pulsar Job
+    + start (number, optional) - Absolute start time in UNIX timestamp.
+    + end (number, optional) - Absolute end time in UNIX timestamp (defaults to current time).
+    + period: `1h` (number, optional) - Relative time (default `1h`). If both `period` and `start/end` are given, `period` takes precendence.
+    + geo: `*` (string, optional) - Geocode to filter on (default `*`).
+    + asn (string, optional) - ASN to filter on
+    + agg: `p50` (enum[string], optional) - Aggregation Type (default `p50`)
+        + Members
+            + avg
+            + max
+            + min
+            + p50
+            + p75
+            + p90
+            + p95
+            + p99
+            + p999
+
+### Get Aggregated Data [GET]
+
++ Response 200 (application/json)
+
+##########################################################
+
+# Data Structures
+
+## RateLimitType (object)
+
++ name: `GET:/zones` (string, required) - Name of the endpoint to rate limit.
++ by: `key` (enum[string]) - The requests' identifier to rate limit by
+    
+    + Default: `key`
+    
+    + Members
+        + `key`
+        + `customer`
+        + `user`
+        + `ip`
+
++ period: `3600` (number) - The time it takes to refill a bucket of tokens        
+    + Default: `3600`
++ limit: `100` (number) - The number of tokens in the bucket
+    + Default: `100`
++ ttl: `96000` (number) - The redis TTL for the rate limit entry
+    + Default: `96000`
+
+## ZoneType (object)
++ id: `traeg442` (string)
++ zone: `example.zone` (string)
++ nx_ttl: `3600` (number)
++ retry: `7200` (number)
++ network_pools: `["p01"]` (array[string])
++ refresh: `43200` (number)
++ expiry: `1209600` (number)
++ dns_servers: `["dns1.p01.nsone.net","dns2.p01.nsone.net"]` (array[string])
++ serial: `1473781037` (number)
++ ttl: `60` (number)
++ id: `4q345ghw459gh` (string)
++ hostmaster: `hostmaster@example.zone` (string)
++ networks: `[0]` (array[number])
++ pool: `p01` (string)
++ records (array[ZoneRecordTypeA])
++ primary (PrimaryType)
+
+## ZoneRecordTypeA
++ domain: "*.example.zone" (string)
++ short_answers: `["107.6.104.250"]` (array[string])
++ ttl: `60` (number)
++ tier: `1` (number)
++ type: `A` (string)
++ id: `24it349qg34` (string)
+
+## ZoneRecordTypeAAgain
++ domain: `example.zone` (string)
++ short_answers: `["107.6.104.250"]` (array[string])
++ ttl: `3600` (number)
++ tier: `1` (number)
++ type: `A` (string)
++ id: `324qt3g3qg` (string)
+
+## ZoneRecordTypeMX
++ domain: `example.zone` (string)
++ short_answers: `["10 mail.aroundtheglo.be"]` (array[string])
++ ttl: `60` (number)
++ tier: `1` (number)
++ type: `MX` (string)
++ id: `324qt3g3qg` (string)
+
+## ZoneRecordTypeNS
++ domain: `example.zone` (string)
++ short_answers: `["dns1.p01.nsone.net","dns2.p01.nsone.net","dns3.p01.nsone.net","dns4.p01.nsone.net"]` (array[string])
++ ttl: `3600` (number)
++ tier: `1` (number)
++ type: `NS` (string)
++ id: `324qt3g3qg` (string)
+
+## ZoneRecordTypeAAAA
++ domain: `t.example.zone` (string)
++ short_answers: `["2620:4d:4002:142::100b"]` (array[string])
++ ttl: `3600` (number)
++ tier: `1` (number)
++ type: `AAAA` (string)
++ id: `324qt3g3qg` (string)
+
+## PrimaryType
++ enabled: `false` (boolean)
++ secondaries: `[]` (array[string])
+"domain": "mail.example.com",
+  "zone": "example.com",
+  
+## RecordType (object)
++ id: `traeg442` (string)
++ zone: `example.zone` (string)
++ domain: `mail.example.zone` (string)
++ type: `MX` (string)
++ tier: `1` (number)
++ networks: `[0]` (array[number])
++ ttl: `3600` (number)
++ use_client_subnet: `true` (boolean)
+
+
+## PulsarFirehoseBaseType (object)
++ id: `reaf234g` (string)
++ active: `true` (boolean)
++ typeid: `udp` (enum[string])
+    + Members
+        + `udp`
+        + `http`
+        + `aggregate_metric`
+        + `aggregate_recursor`
+        + `local_logger`
+        + `sample_raw_data`
+
+## PulsarAppType
++ id: `1234abc` (string)
++ appid: `aew4g23` (string)
++ name: `Pulsar community` (string)
++ community: `true` (boolean)
++ active: `true` (boolean)
++ networks: `[0]` (array[number])
++ tags: `["demo"]` (array[string])
++ default_firehouses (array[PulsarFirehoseBaseType])
++ default_config (PulsarJobConfigType)
+
+## PulsarJobType (object)
++ id: `1234abc` (string)
++ customer: `1001` (number)
++ appid: `1xrea3` (string)
++ jobid: `432eaw` (string)
++ name: `CDN Latency` (string)
++ typeid: `latency` (enum[string])
+    + Members
+        + `latency`
+        + `mobile`
+        + `recursor`
+        + `anycast_recursor`
+        + `anycast_eyeball`
+        + `custom`
++ active (boolean)
++ community (boolean)
++ shared (boolean)
++ networks: `[0]` (array[number])
++ firehouses (array[PulsarFirehoseBaseType])
++ config (PulsarJobConfigType)
+
+## PulsarJobConfigType (object)
++ host: `www.host.com` (string)
++ url_path: `/l.gif` (string)
++ http (boolean)
++ https (boolean)
++ request_timeout_millis (number)
++ max_rps (number)
++ priority (number)
++ latitude (number)
++ longitude (number)
++ granularities: `["geo", "geo_asn"]` (array[string])
++ classifiers (array[string])
+
+## PulsarFirehoseUDPType (PulsarFirehoseBaseType)
++ typeid: `udp` (string)
++ host: `www.host.com` (string)
++ port: `80` (number)
+
+## PulsarFirehoseHTTPType (PulsarFirehoseBaseType)
++ typeid: `http` (string)
++ url (string)
++ username (string)
++ password (string)
+
+## PulsarFirehoseAggregateMetricType (PulsarFirehoseBaseType)
++ typeid: `aggregate_metric` (string)
++ window (number)
++ flush_percent (number)
++ datapoint_ttl (number)
++ value_min (number)
++ value_max (number)
++ measurements_min (number)
++ normalize (boolean)
++ stddev_max (number)
++ store_history (boolean)
+
+## PulsarFirehoseAggregateRecursorType (PulsarFirehoseBaseType)
++ typeid: `aggregate_recursor` (string)
+
+## PulsarFirehoseLocalLoggerType (PulsarFirehoseBaseType)
++ typeid: `local_logger` (string)
++ format_string (string)
++ percent: `0.1` (number)
+
+## PulsarFirehoseSampleRawDataType (PulsarFirehoseBaseType)
++ typeid: `sample_raw_data` (string)
++ percent: `0.1` (number)
+
+## PulsarLiveJobDataType (object)
++ GEOREGION (object)
+    + age: `99.7` (number) - Describes how old this value is, in seconds. 
+    It's computed as the difference of the time the request was made and the last time the aggregate value was stored by Pulsar.
+    
+    + value: `47.977` (number) - The aggregated data point. 
+    The meaning of this value depends on the job type. For latency-type jobs, this should be average RTT.
+
+
